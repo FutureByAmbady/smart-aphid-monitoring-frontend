@@ -13,7 +13,7 @@ import {
 
 /* -------------------------------- Constants ------------------------------- */
 
-const API_BASE = "http://127.0.0.1:8000";
+const API_BASE = "https://smart-aphid-monitoring-api.onrender.com";
 const DETECT_ENDPOINT = `${API_BASE}/detect`;
 
 /* ------------------------------- Components ------------------------------- */
@@ -298,7 +298,7 @@ export default function App() {
       if (err instanceof TypeError) {
         // Network-level failure (backend unreachable)
         setError(
-          "Unable to connect to the detection server. Please make sure the backend is running at http://127.0.0.1:8000 and try again."
+"Unable to connect to the detection server. Please try again in a few seconds."        
         );
       } else {
         setError(err.message || "Something went wrong while processing the image.");
