@@ -12,8 +12,7 @@ import {
 } from "lucide-react";
 
 /* -------------------------------- Constants ------------------------------- */
-const API_BASE = "https://disarray-slapstick-judgingly.ngrok-free.dev";
-
+const API_BASE = "http://127.0.0.1:8000";
 const DETECT_ENDPOINT = `${API_BASE}/detect`;
 
 /* ------------------------------- Components ------------------------------- */
