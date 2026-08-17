@@ -38,8 +38,216 @@ import { supabase } from "./lib/supabase";
 
 const API_BASE = "http://127.0.0.1:8000";
 const DETECT_ENDPOINT = `${API_BASE}/detect`;
+const DEVICES_ENDPOINT = `${API_BASE}/devices`;
 
 const REFRESH_INTERVAL = 15000;
+
+/* ============================================================
+   DEVICE ACCESS / SELECTION
+============================================================ */
+
+function DeviceSelection({ onSelect }) {
+  const [devices, setDevices] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const loadDevices = async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch(DEVICES_ENDPOINT);
+
+      if (!response.ok) {
+        throw new Error(
+          `Device server responded with status ${response.status}.`
+        );
+      }
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(
+          data.error || "Could not load monitoring devices."
+        );
+      }
+
+      setDevices(data.devices || []);
+    } catch (err) {
+      console.error("Device loading error:", err);
+
+      if (err instanceof TypeError) {
+        setError(
+          "Unable to connect to the monitoring server. Please start the backend and try again."
+        );
+      } else {
+        setError(
+          err.message || "Could not load monitoring devices."
+        );
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadDevices();
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-gray-50 text-gray-900">
+      <style>{`
+        @import url('https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.16/index.min.css');
+
+        body {
+          font-family:
+            'Inter',
+            ui-sans-serif,
+            system-ui,
+            -apple-system,
+            sans-serif;
+        }
+      `}</style>
+
+      <Header />
+
+      <main className="mx-auto flex min-h-[calc(100vh-89px)] max-w-5xl flex-col justify-center px-6 py-12">
+        <div className="mx-auto w-full max-w-4xl">
+          <div className="mb-8 text-center">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#2E7D32] shadow-sm">
+              <Camera className="h-7 w-7 text-white" />
+            </div>
+
+            <h2 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">
+              Select Monitoring Device
+            </h2>
+
+            <p className="mx-auto mt-2 max-w-xl text-sm text-gray-500">
+              Select a registered and connected monitoring system to access
+              its detection data.
+            </p>
+          </div>
+
+          {loading ? (
+            <div className="rounded-2xl border border-gray-200 bg-white p-12 text-center shadow-sm">
+              <RefreshCw className="mx-auto h-6 w-6 animate-spin text-[#2E7D32]" />
+              <p className="mt-3 text-sm font-medium text-gray-600">
+                Checking registered devices...
+              </p>
+            </div>
+          ) : error ? (
+            <div className="rounded-2xl border border-red-200 bg-white p-8 text-center shadow-sm">
+              <AlertTriangle className="mx-auto h-8 w-8 text-red-600" />
+              <p className="mt-3 text-sm font-semibold text-red-800">
+                Unable to load devices
+              </p>
+              <p className="mx-auto mt-1 max-w-lg text-sm text-red-700">
+                {error}
+              </p>
+
+              <button
+                type="button"
+                onClick={loadDevices}
+                className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[#2E7D32] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#256628]"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Try Again
+              </button>
+            </div>
+          ) : devices.length === 0 ? (
+            <div className="rounded-2xl border border-gray-200 bg-white p-12 text-center shadow-sm">
+              <Database className="mx-auto h-8 w-8 text-gray-400" />
+              <p className="mt-3 text-sm font-semibold text-gray-800">
+                No monitoring devices registered
+              </p>
+              <p className="mt-1 text-sm text-gray-500">
+                Register a device in the database before accessing the
+                monitoring dashboard.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {devices.map((device) => {
+                const online = device.status === "online";
+                const registered = device.can_access === true;
+                const available = registered && online;
+
+                return (
+                  <div
+                    key={device.device_id}
+                    className={`relative overflow-hidden rounded-2xl border bg-white p-5 shadow-sm transition ${
+                      available
+                        ? "border-gray-200 hover:-translate-y-0.5 hover:border-[#2E7D32] hover:shadow-md"
+                        : "border-gray-200 opacity-75"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#2E7D32]/10">
+                        <Camera className="h-5 w-5 text-[#2E7D32]" />
+                      </div>
+
+                      <span
+                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                          online
+                            ? "bg-green-50 text-green-700"
+                            : "bg-red-50 text-red-700"
+                        }`}
+                      >
+                        <span
+                          className={`h-1.5 w-1.5 rounded-full ${
+                            online ? "bg-green-500" : "bg-red-500"
+                          }`}
+                        />
+                        {online ? "ONLINE" : "OFFLINE"}
+                      </span>
+                    </div>
+
+                    <div className="mt-5">
+                      <h3 className="text-base font-bold text-gray-900">
+                        {device.device_name || "Unnamed Device"}
+                      </h3>
+
+                      <p className="mt-1 text-xs font-medium text-gray-500">
+                        {device.device_id}
+                      </p>
+
+                      <p className="mt-3 text-sm text-gray-600">
+                        {device.location || "Location not specified"}
+                      </p>
+                    </div>
+
+                    <div className="mt-5 border-t border-gray-100 pt-4">
+                      {available ? (
+                        <button
+                          type="button"
+                          onClick={() => onSelect(device)}
+                          className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#2E7D32] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#256628]"
+                        >
+                          Open Device
+                          <span aria-hidden="true">→</span>
+                        </button>
+                      ) : (
+                        <div className="rounded-lg bg-gray-100 px-4 py-2.5 text-center text-xs font-semibold text-gray-500">
+                          {registered
+                            ? "Device is offline"
+                            : "Device not registered"}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <p className="mt-8 text-center text-xs text-gray-400">
+            Only registered and online monitoring systems can be accessed.
+          </p>
+        </div>
+      </main>
+    </div>
+  );
+}
 
 /* ============================================================
    HEADER
@@ -351,6 +559,7 @@ function DashboardFilters({
   setSelectedDevice,
   period,
   setPeriod,
+  activeDevice,
 }) {
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
@@ -367,9 +576,11 @@ function DashboardFilters({
             }
             className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-800 outline-none focus:border-[#2E7D32]"
           >
-            <option value="all">
-              All Devices
-            </option>
+            {!activeDevice && (
+              <option value="all">
+                All Devices
+              </option>
+            )}
 
             {devices.map((device) => (
               <option key={device} value={device}>
@@ -450,9 +661,17 @@ function MonitoringDashboard({
   detections,
   loading,
   onRefresh,
+  activeDevice,
+  onChangeDevice,
 }) {
   const [selectedDevice, setSelectedDevice] =
-    useState("all");
+    useState(activeDevice?.device_id || "all");
+
+  useEffect(() => {
+    setSelectedDevice(
+      activeDevice?.device_id || "all"
+    );
+  }, [activeDevice]);
 
   const [period, setPeriod] =
     useState("today");
@@ -622,23 +841,64 @@ function MonitoringDashboard({
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={onRefresh}
-          disabled={loading}
-          className="inline-flex w-fit items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-        >
-          <RefreshCw
-            className={`h-4 w-4 ${
-              loading
-                ? "animate-spin"
-                : ""
-            }`}
-          />
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={loading}
+            className="inline-flex w-fit items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${
+                loading
+                  ? "animate-spin"
+                  : ""
+              }`}
+            />
 
-          Refresh
-        </button>
+            Refresh
+          </button>
+
+          {activeDevice && (
+            <button
+              type="button"
+              onClick={onChangeDevice}
+              className="inline-flex w-fit items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Change Device
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Active device */}
+
+      {activeDevice && (
+        <div className="mb-5 flex flex-col gap-3 rounded-xl border border-green-200 bg-green-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white shadow-sm">
+              <Camera className="h-5 w-5 text-[#2E7D32]" />
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-green-700">
+                Active Monitoring Device
+              </p>
+              <p className="mt-0.5 text-sm font-bold text-gray-900">
+                {activeDevice.device_name} · {activeDevice.device_id}
+              </p>
+              <p className="text-xs text-gray-500">
+                {activeDevice.location || "Location not specified"}
+              </p>
+            </div>
+          </div>
+
+          <span className="inline-flex w-fit items-center gap-2 rounded-full bg-green-100 px-3 py-1.5 text-xs font-bold text-green-700">
+            <span className="h-2 w-2 rounded-full bg-green-500" />
+            Connected
+          </span>
+        </div>
+      )}
 
       {/* Filters */}
 
@@ -649,6 +909,7 @@ function MonitoringDashboard({
           setSelectedDevice
         }
         period={period}
+        activeDevice={activeDevice}
         setPeriod={setPeriod}
       />
 
@@ -730,8 +991,8 @@ function MonitoringDashboard({
                 margin={{
                   top: 10,
                   right: 15,
-                  left: 5,
-                  bottom: 10,
+                  left: 0,
+                  bottom: 35,
                 }}
               >
                 <CartesianGrid
@@ -743,15 +1004,12 @@ function MonitoringDashboard({
                 <XAxis
                   dataKey="label"
                   tick={{
-                    fontSize: 11,
+                    fontSize: 12,
                     fill: "#6b7280",
                   }}
-                  tickLine={false}
-                  axisLine={{ stroke: "#d1d5db" }}
-                  tickMargin={8}
-                  minTickGap={32}
-                  interval="preserveStartEnd"
-                  height={42}
+                  angle={period === "today" ? -45 : 0}
+                  textAnchor={period === "today" ? "end" : "middle"}
+                  height={period === "today" ? 80 : 40}
                 />
 
                 <YAxis
@@ -826,8 +1084,8 @@ function MonitoringDashboard({
                 margin={{
                   top: 10,
                   right: 15,
-                  left: 5,
-                  bottom: 10,
+                  left: 0,
+                  bottom: 35,
                 }}
               >
                 <CartesianGrid
@@ -839,15 +1097,12 @@ function MonitoringDashboard({
                 <XAxis
                   dataKey="label"
                   tick={{
-                    fontSize: 11,
+                    fontSize: 12,
                     fill: "#6b7280",
                   }}
-                  tickLine={false}
-                  axisLine={{ stroke: "#d1d5db" }}
-                  tickMargin={8}
-                  minTickGap={32}
-                  interval="preserveStartEnd"
-                  height={42}
+                  angle={period === "today" ? -45 : 0}
+                  textAnchor={period === "today" ? "end" : "middle"}
+                  height={period === "today" ? 80 : 40}
                 />
 
                 <YAxis
@@ -1147,117 +1402,89 @@ function aggregateDetectionsByTime(records, period) {
   }
 
   const isHourly = period === "today";
-  const timeZone = "Asia/Kolkata";
-  const bucketed = new Map();
+  const bucketed = {};
 
-  const getParts = (date, options) => {
-    const formatter = new Intl.DateTimeFormat("en-US", {
-      timeZone,
-      ...options,
-    });
-
-    const parts = formatter.formatToParts(date);
-    return Object.fromEntries(
-      parts
-        .filter((part) => part.type !== "literal")
-        .map((part) => [part.type, part.value])
-    );
-  };
-
+  // Group records by hour (for today) or day (for other periods)
   records.forEach((record) => {
     if (!record.captured_at) return;
 
-    const date = new Date(record.captured_at);
-    if (Number.isNaN(date.getTime())) return;
+    const utcDate = new Date(record.captured_at);
+    if (Number.isNaN(utcDate.getTime())) return;
 
     let key;
-    let label;
-    let sortValue;
+    let displayLabel;
 
     if (isHourly) {
-      const parts = getParts(date, {
+      // For hourly aggregation, get the hour in Asia/Kolkata timezone
+      const hourFormatter = new Intl.DateTimeFormat("en-US", {
+        timeZone: "Asia/Kolkata",
         year: "numeric",
         month: "2-digit",
         day: "2-digit",
         hour: "2-digit",
-        hour12: false,
+        hour12: true,
       });
 
-      const year = Number(parts.year);
-      const month = Number(parts.month);
-      const day = Number(parts.day);
-      const hour = Number(parts.hour);
+      const parts = hourFormatter.formatToParts(utcDate);
+      const partsObj = {};
+      parts.forEach((p) => {
+        partsObj[p.type] = p.value;
+      });
 
-      // The key is based on India time, not the browser's local timezone.
-      key = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(
-        2,
-        "0"
-      )}-${String(hour).padStart(2, "0")}`;
-
-      const hour12 = hour % 12 || 12;
-      const periodLabel = hour >= 12 ? "PM" : "AM";
-      label = `${String(hour12).padStart(2, "0")}:00 ${periodLabel}`;
-
-      // UTC is used only as a stable sorting number.
-      sortValue = Date.UTC(year, month - 1, day, hour, 0, 0);
+      // Create a key for unique hours: YYYY-MM-DD-HH (24-hour for grouping)
+      const hour24 = new Date(
+        partsObj.year,
+        Number(partsObj.month) - 1,
+        Number(partsObj.day),
+        partsObj.hour === "12" && partsObj.dayperiod === "AM" 
+          ? 0 
+          : partsObj.hour === "12" 
+            ? 12 
+            : Number(partsObj.hour) + (partsObj.dayperiod === "PM" ? 12 : 0)
+      );
+      
+      key = hour24.toISOString().slice(0, 13); // "2026-08-14T15"
+      displayLabel = `${partsObj.hour}:00 ${partsObj.dayperiod}`; // e.g., "05:00 PM"
     } else {
-      const parts = getParts(date, {
+      // For daily aggregation, get the date in Asia/Kolkata timezone
+      const dayFormatter = new Intl.DateTimeFormat("en-US", {
+        timeZone: "Asia/Kolkata",
         year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      });
-
-      const year = Number(parts.year);
-      const month = Number(parts.month);
-      const day = Number(parts.day);
-
-      key = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(
-        2,
-        "0"
-      )}`;
-
-      const dayDate = new Date(Date.UTC(year, month - 1, day));
-
-      label = new Intl.DateTimeFormat("en-US", {
-        timeZone: "UTC",
         month: "short",
         day: "numeric",
-      }).format(dayDate);
+      });
 
-      sortValue = Date.UTC(year, month - 1, day);
+      displayLabel = dayFormatter.format(utcDate);
+      key = displayLabel; // Use display label as key for daily
     }
 
-    if (!bucketed.has(key)) {
-      bucketed.set(key, {
-        label,
+    if (!bucketed[key]) {
+      bucketed[key] = {
+        label: displayLabel,
         insects: 0,
         confidenceValues: [],
-        sortValue,
-      });
+      };
     }
 
-    const bucket = bucketed.get(key);
-
-    bucket.insects += Number(record.insect_count || 0);
+    bucketed[key].insects += Number(record.insect_count || 0);
 
     const confidence = Number(record.average_confidence || 0);
     if (confidence > 0) {
-      bucket.confidenceValues.push(confidence);
+      bucketed[key].confidenceValues.push(confidence);
     }
   });
 
-  return Array.from(bucketed.values())
+  // Convert to array and calculate averages
+  return Object.values(bucketed)
     .map((item) => {
       const avgConfidence =
         item.confidenceValues.length > 0
           ? Number(
               (
                 (item.confidenceValues.reduce(
-                  (sum, value) => sum + value,
+                  (sum, val) => sum + val,
                   0
-                ) /
-                  item.confidenceValues.length) *
-                100
+                ) / item.confidenceValues.length) * 100
               ).toFixed(1)
             )
           : null;
@@ -1266,10 +1493,28 @@ function aggregateDetectionsByTime(records, period) {
         label: item.label,
         insects: item.insects,
         confidence: avgConfidence,
-        sortValue: item.sortValue,
       };
     })
-    .sort((a, b) => a.sortValue - b.sortValue);
+    .sort((a, b) => {
+      // Sort chronologically if we have time data to extract
+      // For hourly, both should have HH:MM format
+      // For daily, both should have "MMM DD" format
+      if (isHourly) {
+        // Extract hour from "HH:MM AM/PM" format
+        const getHourValue = (label) => {
+          const match = label.match(/(\d+):00\s(AM|PM)/);
+          if (!match) return 0;
+          let hour = Number(match[1]);
+          if (match[2] === "PM" && hour !== 12) hour += 12;
+          if (match[2] === "AM" && hour === 12) hour = 0;
+          return hour;
+        };
+        return getHourValue(a.label) - getHourValue(b.label);
+      } else {
+        // For dates, maintain insertion order (they're typically reverse chronological from DB)
+        return 0;
+      }
+    });
 }
 
 /* ============================================================
@@ -1319,6 +1564,9 @@ function formatDate(value) {
 ============================================================ */
 
 export default function App() {
+  const [activeDevice, setActiveDevice] =
+    useState(null);
+
   const [image, setImage] =
     useState(null);
 
@@ -1338,6 +1586,90 @@ export default function App() {
     loadingDetections,
     setLoadingDetections,
   ] = useState(false);
+
+  /* ----------------------------------------------------------
+     Device session
+  ---------------------------------------------------------- */
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const restoreDevice = async () => {
+      try {
+        const saved = sessionStorage.getItem(
+          "activeMonitoringDevice"
+        );
+
+        if (!saved) return;
+
+        const savedDevice = JSON.parse(saved);
+
+        if (!savedDevice?.device_id) return;
+
+        const response = await fetch(
+          `${DEVICES_ENDPOINT}/${encodeURIComponent(
+            savedDevice.device_id
+          )}`
+        );
+
+        if (!response.ok) return;
+
+        const data = await response.json();
+
+        if (
+          !cancelled &&
+          data.success &&
+          data.registered &&
+          data.can_access &&
+          data.device?.status === "online"
+        ) {
+          setActiveDevice(data.device);
+
+          sessionStorage.setItem(
+            "activeMonitoringDevice",
+            JSON.stringify(data.device)
+          );
+        } else if (!cancelled) {
+          sessionStorage.removeItem(
+            "activeMonitoringDevice"
+          );
+        }
+      } catch (err) {
+        console.warn(
+          "Could not validate saved device session:",
+          err
+        );
+
+        if (!cancelled) {
+          sessionStorage.removeItem(
+            "activeMonitoringDevice"
+          );
+        }
+      }
+    };
+
+    restoreDevice();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleDeviceSelect = (device) => {
+    setActiveDevice(device);
+
+    sessionStorage.setItem(
+      "activeMonitoringDevice",
+      JSON.stringify(device)
+    );
+  };
+
+  const handleDeviceLogout = () => {
+    setActiveDevice(null);
+    sessionStorage.removeItem(
+      "activeMonitoringDevice"
+    );
+  };
 
   /* ----------------------------------------------------------
      Supabase
@@ -1373,7 +1705,15 @@ export default function App() {
         throw supabaseError;
       }
 
-      setDetections(data || []);
+      const deviceData = activeDevice
+        ? (data || []).filter(
+            (item) =>
+              item.device_id ===
+              activeDevice.device_id
+          )
+        : [];
+
+      setDetections(deviceData);
     } catch (err) {
       console.error(
         "Failed to load detections:",
@@ -1389,6 +1729,11 @@ export default function App() {
   ---------------------------------------------------------- */
 
   useEffect(() => {
+    if (!activeDevice) {
+      setDetections([]);
+      return undefined;
+    }
+
     loadDetections();
 
     const interval =
@@ -1399,7 +1744,7 @@ export default function App() {
 
     return () =>
       clearInterval(interval);
-  }, []);
+  }, [activeDevice?.device_id]);
 
   /* ----------------------------------------------------------
      Manual upload
@@ -1539,6 +1884,14 @@ export default function App() {
      UI
   ---------------------------------------------------------- */
 
+  if (!activeDevice) {
+    return (
+      <DeviceSelection
+        onSelect={handleDeviceSelect}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
       <style>{`
@@ -1630,6 +1983,8 @@ export default function App() {
           onRefresh={
             loadDetections
           }
+          activeDevice={activeDevice}
+          onChangeDevice={handleDeviceLogout}
         />
 
         <p className="mt-8 text-xs text-gray-400">
