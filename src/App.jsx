@@ -559,7 +559,6 @@ function DashboardFilters({
   setSelectedDevice,
   period,
   setPeriod,
-  activeDevice,
 }) {
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
@@ -676,6 +675,10 @@ function MonitoringDashboard({
   const [period, setPeriod] =
     useState("today");
 
+  // Detection History: show only the latest 5 records by default.
+  const [showAllHistory, setShowAllHistory] =
+    useState(false);
+
   /* ----------------------------------------------------------
      Devices
   ---------------------------------------------------------- */
@@ -745,6 +748,18 @@ function MonitoringDashboard({
     selectedDevice,
     period,
   ]);
+
+  // Keep the history compact: latest 5 first, with optional expansion.
+  const visibleHistory = useMemo(() => {
+    return showAllHistory
+      ? filteredDetections
+      : filteredDetections.slice(0, 5);
+  }, [filteredDetections, showAllHistory]);
+
+  // Reset the expanded state whenever filters/device change.
+  useEffect(() => {
+    setShowAllHistory(false);
+  }, [selectedDevice, period, activeDevice?.device_id]);
 
   /* ----------------------------------------------------------
      Statistics
@@ -909,7 +924,6 @@ function MonitoringDashboard({
           setSelectedDevice
         }
         period={period}
-        activeDevice={activeDevice}
         setPeriod={setPeriod}
       />
 
@@ -1255,7 +1269,11 @@ function MonitoringDashboard({
           </div>
 
           <span className="text-xs font-medium text-gray-400">
-            Showing {filteredDetections.length} records
+            {filteredDetections.length > 5
+              ? showAllHistory
+                ? `Showing all ${filteredDetections.length} records`
+                : `Showing 5 of ${filteredDetections.length} records`
+              : `Showing ${filteredDetections.length} records`}
           </span>
         </div>
 
@@ -1301,7 +1319,7 @@ function MonitoringDashboard({
               </thead>
 
               <tbody className="divide-y divide-gray-100">
-                {filteredDetections.map(
+                {visibleHistory.map(
                   (item) => (
                     <tr
                       key={item.id}
@@ -1363,6 +1381,22 @@ function MonitoringDashboard({
                 )}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {filteredDetections.length > 5 && (
+          <div className="flex justify-center border-t border-gray-100 p-4">
+            <button
+              type="button"
+              onClick={() =>
+                setShowAllHistory((current) => !current)
+              }
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-[#2E7D32] shadow-sm transition hover:border-[#2E7D32] hover:bg-green-50"
+            >
+              {showAllHistory
+                ? "Show Less"
+                : `View More (${filteredDetections.length - 5} more)`}
+            </button>
           </div>
         )}
       </div>
