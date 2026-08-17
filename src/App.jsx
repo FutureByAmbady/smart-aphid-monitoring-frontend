@@ -559,6 +559,7 @@ function DashboardFilters({
   setSelectedDevice,
   period,
   setPeriod,
+  activeDevice,
 }) {
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
@@ -925,6 +926,7 @@ function MonitoringDashboard({
         }
         period={period}
         setPeriod={setPeriod}
+        activeDevice={activeDevice}
       />
 
       {/* Summary */}
