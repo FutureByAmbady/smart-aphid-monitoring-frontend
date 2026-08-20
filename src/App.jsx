@@ -123,8 +123,7 @@ function DeviceSelection({ onSelect }) {
             </h2>
 
             <p className="mx-auto mt-2 max-w-xl text-sm text-gray-500">
-              Select a registered and connected monitoring system to access
-              its detection data.
+              Select a registered monitoring system to access its detection and telemetry data.
             </p>
           </div>
 
@@ -227,7 +226,7 @@ function DeviceSelection({ onSelect }) {
           )}
 
           <p className="mt-8 text-center text-xs text-gray-400">
-            Device status shows the current communication state. Offline devices remain accessible
+            Device status indicates the current communication state. Offline devices remain accessible and display their latest available data.
           </p>
         </div>
       </main>
@@ -443,6 +442,50 @@ function ErrorBanner({ message }) {
 }
 
 /* ============================================================
+   TELEMETRY CARD
+============================================================ */
+
+function TelemetryCard({
+  label,
+  value,
+  unit,
+  subtitle,
+  status,
+}) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+          {label}
+        </p>
+        {status && (
+          <span
+            className={`h-2.5 w-2.5 rounded-full ${
+              status === "good" ? "bg-green-500" : "bg-red-500"
+            }`}
+          />
+        )}
+      </div>
+
+      <div className="mt-3 flex items-baseline gap-1">
+        <span className="text-2xl font-bold text-gray-900">
+          {value}
+        </span>
+        {unit && (
+          <span className="text-sm font-semibold text-gray-500">
+            {unit}
+          </span>
+        )}
+      </div>
+
+      <p className="mt-1 text-xs text-gray-400">
+        {subtitle}
+      </p>
+    </div>
+  );
+}
+
+/* ============================================================
    STAT CARD
 ============================================================ */
 
@@ -648,6 +691,8 @@ function MonitoringDashboard({
   loading,
   onRefresh,
   activeDevice,
+  telemetry,
+  loadingTelemetry,
   onChangeDevice,
 }) {
   const [selectedDevice, setSelectedDevice] =
@@ -895,10 +940,119 @@ function MonitoringDashboard({
             </div>
           </div>
 
-          <span className="inline-flex w-fit items-center gap-2 rounded-full bg-green-100 px-3 py-1.5 text-xs font-bold text-green-700">
-            <span className="h-2 w-2 rounded-full bg-green-500" />
-            Connected
+          <span
+            className={`inline-flex w-fit items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold ${
+              activeDevice.status === "online"
+                ? "bg-green-100 text-green-700"
+                : "bg-red-100 text-red-700"
+            }`}
+          >
+            <span
+              className={`h-2 w-2 rounded-full ${
+                activeDevice.status === "online"
+                  ? "bg-green-500"
+                  : "bg-red-500"
+              }`}
+            />
+            {activeDevice.status === "online" ? "ONLINE" : "OFFLINE"}
           </span>
+        </div>
+      )}
+
+      {/* Device telemetry */}
+
+      {activeDevice && (
+        <div className="mb-5">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-bold text-gray-900">
+                Device Telemetry
+              </h3>
+              <p className="mt-1 text-xs text-gray-500">
+                Latest data received from the monitoring device
+              </p>
+            </div>
+
+            {telemetry?.received_at && (
+              <span className="text-xs text-gray-400">
+                Last update: {formatDate(telemetry.received_at)}
+              </span>
+            )}
+          </div>
+
+          {loadingTelemetry && !telemetry ? (
+            <div className="rounded-xl border border-gray-200 bg-white p-6 text-center text-sm text-gray-500 shadow-sm">
+              Loading device telemetry...
+            </div>
+          ) : !telemetry ? (
+            <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-6 text-center shadow-sm">
+              <p className="text-sm font-semibold text-yellow-800">
+                No telemetry data available
+              </p>
+              <p className="mt-1 text-xs text-yellow-700">
+                Waiting for this device to send its first telemetry update.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+              <TelemetryCard
+                label="Battery"
+                value={
+                  telemetry.battery_percentage != null
+                    ? Number(telemetry.battery_percentage).toFixed(1)
+                    : "—"
+                }
+                unit="%"
+                subtitle="Battery level"
+              />
+
+              <TelemetryCard
+                label="Temperature"
+                value={
+                  telemetry.temperature_c != null
+                    ? Number(telemetry.temperature_c).toFixed(1)
+                    : "—"
+                }
+                unit="°C"
+                subtitle="Device temperature"
+              />
+
+              <TelemetryCard
+                label="Humidity"
+                value={
+                  telemetry.humidity_percent != null
+                    ? Number(telemetry.humidity_percent).toFixed(1)
+                    : "—"
+                }
+                unit="%"
+                subtitle="Relative humidity"
+              />
+
+              <TelemetryCard
+                label="Signal"
+                value={
+                  telemetry.cellular_signal_dbm != null
+                    ? Number(telemetry.cellular_signal_dbm).toFixed(0)
+                    : "—"
+                }
+                unit="dBm"
+                subtitle="Cellular signal"
+              />
+
+              <TelemetryCard
+                label="Network"
+                value={
+                  telemetry.network_connected
+                    ? "Connected"
+                    : "Disconnected"
+                }
+                subtitle="Network status"
+                status={
+                  telemetry.network_connected ? "good" : "bad"
+                }
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -1609,6 +1763,9 @@ export default function App() {
     setLoadingDetections,
   ] = useState(false);
 
+  const [telemetry, setTelemetry] = useState(null);
+  const [loadingTelemetry, setLoadingTelemetry] = useState(false);
+
   /* ----------------------------------------------------------
      Device session
   ---------------------------------------------------------- */
@@ -1641,9 +1798,7 @@ export default function App() {
         if (
           !cancelled &&
           data.success &&
-          data.registered &&
-          data.can_access &&
-          data.device?.status === "online"
+          data.registered
         ) {
           setActiveDevice(data.device);
 
@@ -1747,22 +1902,63 @@ export default function App() {
   };
 
   /* ----------------------------------------------------------
+     Device telemetry
+  ---------------------------------------------------------- */
+
+  const loadTelemetry = async () => {
+    if (!activeDevice?.device_id) {
+      setTelemetry(null);
+      return;
+    }
+
+    setLoadingTelemetry(true);
+
+    try {
+      const response = await fetch(
+        `${API_BASE}/devices/${encodeURIComponent(
+          activeDevice.device_id
+        )}/telemetry`
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `Telemetry API returned ${response.status}`
+        );
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.telemetry) {
+        setTelemetry(data.telemetry);
+      } else {
+        setTelemetry(null);
+      }
+    } catch (err) {
+      console.error("Failed to load telemetry:", err);
+      setTelemetry(null);
+    } finally {
+      setLoadingTelemetry(false);
+    }
+  };
+
+  /* ----------------------------------------------------------
      Initial load + auto refresh
   ---------------------------------------------------------- */
 
   useEffect(() => {
     if (!activeDevice) {
       setDetections([]);
+      setTelemetry(null);
       return undefined;
     }
 
     loadDetections();
+    loadTelemetry();
 
-    const interval =
-      setInterval(
-        loadDetections,
-        REFRESH_INTERVAL
-      );
+    const interval = setInterval(() => {
+      loadDetections();
+      loadTelemetry();
+    }, REFRESH_INTERVAL);
 
     return () =>
       clearInterval(interval);
@@ -1999,13 +2195,14 @@ export default function App() {
 
         <MonitoringDashboard
           detections={detections}
-          loading={
-            loadingDetections
-          }
-          onRefresh={
-            loadDetections
-          }
+          loading={loadingDetections}
+          onRefresh={() => {
+            loadDetections();
+            loadTelemetry();
+          }}
           activeDevice={activeDevice}
+          telemetry={telemetry}
+          loadingTelemetry={loadingTelemetry}
           onChangeDevice={handleDeviceLogout}
         />
 
