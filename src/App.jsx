@@ -199,7 +199,7 @@ function DeviceSelection({ onSelect }) {
 
                     <div className="mt-5">
                       <h3 className="text-base font-bold text-gray-900">
-                        {device.device_name || "Unnamed Device"}
+                        {device.device_name || "Ambady Device"}
                       </h3>
 
                       <p className="mt-1 text-xs font-medium text-gray-500">
