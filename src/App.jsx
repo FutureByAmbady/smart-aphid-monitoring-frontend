@@ -54,25 +54,27 @@ function DeviceSelection({ onSelect }) {
   const loadDevices = async () => {
     setLoading(true);
     setError("");
-
     try {
       const response = await fetch(DEVICES_ENDPOINT);
-
       if (!response.ok) {
         throw new Error(
           `Device server responded with status ${response.status}.`
         );
       }
-
       const data = await response.json();
+      console.log("Devices API response:", data);
 
-      if (!data.success) {
+      // Support both wrapped and legacy array responses.
+      const deviceList = Array.isArray(data)
+        ? data
+        : data.devices;
+
+      if (!Array.isArray(deviceList)) {
         throw new Error(
-          data.error || "Could not load monitoring devices."
+          "Invalid device data received from the server."
         );
       }
-
-      setDevices(data.devices || []);
+      setDevices(deviceList);
     } catch (err) {
       console.error("Device loading error:", err);
 
@@ -547,9 +549,16 @@ function ResultSection({ result }) {
 
       <div className="flex justify-center rounded-lg bg-gray-100 p-3">
         <img
-          src={result.annotatedImage}
+          src={`${result.annotatedImage}?t=${Date.now()}`}
           alt="Annotated detection result"
-          className="max-h-96 w-auto rounded-md object-contain"
+          className="max-h-96 w-full rounded-md object-contain"
+          onError={(e) => {
+            console.error(
+              "Failed to load annotated image:",
+              result.annotatedImage
+            );
+            e.currentTarget.style.display = "none";
+          }}
         />
       </div>
 
@@ -1360,6 +1369,10 @@ function MonitoringDashboard({
                     }
                     alt="Original trap"
                     className="max-h-96 w-full cursor-pointer rounded-lg bg-gray-100 object-contain hover:opacity-95"
+                    loading="lazy"
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                    }}
                   />
                 </a>
               ) : (
@@ -1386,6 +1399,10 @@ function MonitoringDashboard({
                     }
                     alt="Detection result"
                     className="max-h-96 w-full cursor-pointer rounded-lg bg-gray-100 object-contain hover:opacity-95"
+                    loading="lazy"
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                    }}
                   />
                 </a>
               ) : (
@@ -2048,12 +2065,21 @@ export default function App() {
         );
       }
 
+      // Supabase result image is now the primary source.
       const resultImage =
-        data.cloudinary_image
-          ? data.cloudinary_image
-          : data.image
-            ? `${API_BASE}${data.image}`
-            : null;
+        data.result_image_url
+          ? data.result_image_url
+          : data.cloudinary_image
+            ? data.cloudinary_image
+            : data.image
+              ? `${API_BASE}${data.image}`
+              : null;
+
+      if (!resultImage) {
+        throw new Error(
+          "Detection completed, but no result image URL was returned."
+        );
+      }
 
       setResult({
         annotatedImage:
@@ -2073,7 +2099,7 @@ export default function App() {
 
       setTimeout(
         loadDetections,
-        3000
+        1000
       );
     } catch (err) {
       console.error(
