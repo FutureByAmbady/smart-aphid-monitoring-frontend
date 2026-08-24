@@ -1779,7 +1779,7 @@ function MonitoringDashboard({
                   </th>
 
                   <th className="px-5 py-3">
-                    Result
+                    Images
                   </th>
                 </tr>
               </thead>
@@ -1827,20 +1827,37 @@ function MonitoringDashboard({
                       </td>
 
                       <td className="px-5 py-4">
-                        {item.result_image_url ? (
-                          <a
-                            href={
-                              item.result_image_url
-                            }
-                            target="_blank"
-                            rel="noreferrer"
-                            className="font-semibold text-[#2E7D32] hover:underline"
-                          >
-                            View result
-                          </a>
-                        ) : (
-                          "—"
-                        )}
+                        <div className="flex items-center gap-3 whitespace-nowrap">
+                          {item.original_image_url ? (
+                            <a
+                              href={item.original_image_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-semibold text-[#2E7D32] hover:underline"
+                            >
+                              Original
+                            </a>
+                          ) : (
+                            <span className="text-gray-400">
+                              Original unavailable
+                            </span>
+                          )}
+
+                          {item.result_image_url ? (
+                            <a
+                              href={item.result_image_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-semibold text-[#2E7D32] hover:underline"
+                            >
+                              View result
+                            </a>
+                          ) : (
+                            <span className="text-gray-400">
+                              Result unavailable
+                            </span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   )
