@@ -16,6 +16,9 @@ import {
   Trophy,
   Images,
   Activity,
+  LockKeyhole,
+  Power,
+  Loader2,
 } from "lucide-react";
 
 import {
@@ -692,6 +695,306 @@ function ImagePlaceholder() {
 }
 
 /* ============================================================
+   DEVELOPER MODE CONTROL
+============================================================ */
+
+function DeveloperModeControl({ activeDevice }) {
+  const [developerMode, setDeveloperMode] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [password, setPassword] = useState("");
+  const [action, setAction] = useState("enable");
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+
+  const deviceId = activeDevice?.device_id;
+
+  const loadDeveloperMode = async () => {
+    if (!deviceId) return;
+
+    try {
+      setChecking(true);
+
+      const response = await fetch(
+        `${API_BASE}/device/${encodeURIComponent(deviceId)}/developer-mode`
+      );
+
+      if (!response.ok) {
+        throw new Error(`Developer mode API returned ${response.status}`);
+      }
+
+      const data = await response.json();
+      setDeveloperMode(Boolean(data.developer_mode));
+    } catch (err) {
+      console.error("Developer mode status error:", err);
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  useEffect(() => {
+    loadDeveloperMode();
+
+    const interval = setInterval(loadDeveloperMode, REFRESH_INTERVAL);
+
+    return () => clearInterval(interval);
+  }, [deviceId]);
+
+  const openModal = () => {
+    setAction(developerMode ? "disable" : "enable");
+    setPassword("");
+    setError("");
+    setMessage("");
+    setShowModal(true);
+  };
+
+  const closeModal = () => {
+    if (loading) return;
+    setShowModal(false);
+    setPassword("");
+    setError("");
+    setMessage("");
+  };
+
+  const submitDeveloperMode = async (event) => {
+    event.preventDefault();
+
+    if (!deviceId || loading) return;
+
+    if (!password.trim()) {
+      setError("Enter the developer mode password.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch(
+        `${API_BASE}/devices/${encodeURIComponent(deviceId)}/developer-mode`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            password,
+            enabled: action === "enable",
+          }),
+        }
+      );
+
+      let data = null;
+      try {
+        data = await response.json();
+      } catch {
+        data = null;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          data?.detail ||
+            data?.message ||
+            `Developer mode request failed with status ${response.status}.`
+        );
+      }
+
+      const enabled = Boolean(
+        data?.developer_mode ?? (action === "enable")
+      );
+
+      setDeveloperMode(enabled);
+      setMessage(
+        enabled
+          ? "Developer Mode enabled. The Raspberry Pi will stay awake."
+          : "Developer Mode disabled. The Raspberry Pi will shut down after it detects the OFF state."
+      );
+      setPassword("");
+
+      if (!enabled) {
+        // Give the user a short confirmation before closing the dialog.
+        setTimeout(() => {
+          setShowModal(false);
+          setMessage("");
+        }, 1800);
+      }
+    } catch (err) {
+      console.error("Developer mode update error:", err);
+      setError(
+        err instanceof TypeError
+          ? "Unable to connect to the monitoring server."
+          : err.message || "Could not update Developer Mode."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={openModal}
+        disabled={checking}
+        className={`inline-flex w-fit items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${
+          developerMode
+            ? "border-green-300 bg-green-50 text-green-700 hover:bg-green-100"
+            : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+        }`}
+      >
+        <LockKeyhole className="h-4 w-4" />
+        {checking
+          ? "Checking..."
+          : developerMode
+            ? "Developer Mode ON"
+            : "Developer Mode"}
+      </button>
+
+      {showModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="developer-mode-title"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeModal();
+          }}
+        >
+          <form
+            onSubmit={submitDeveloperMode}
+            className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div
+                  className={`flex h-11 w-11 items-center justify-center rounded-xl ${
+                    action === "enable"
+                      ? "bg-green-50 text-[#2E7D32]"
+                      : "bg-red-50 text-red-600"
+                  }`}
+                >
+                  {action === "enable" ? (
+                    <LockKeyhole className="h-5 w-5" />
+                  ) : (
+                    <Power className="h-5 w-5" />
+                  )}
+                </div>
+
+                <div>
+                  <h2
+                    id="developer-mode-title"
+                    className="text-base font-bold text-gray-900"
+                  >
+                    {action === "enable"
+                      ? "Enable Developer Mode"
+                      : "Disable Developer Mode"}
+                  </h2>
+                  <p className="mt-0.5 text-xs text-gray-500">
+                    Device: {deviceId}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeModal}
+                disabled={loading}
+                className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div
+              className={`mt-5 rounded-xl border p-4 text-sm ${
+                action === "enable"
+                  ? "border-green-200 bg-green-50 text-green-800"
+                  : "border-red-200 bg-red-50 text-red-800"
+              }`}
+            >
+              {action === "enable" ? (
+                <>
+                  <p className="font-semibold">Developer access</p>
+                  <p className="mt-1 text-xs leading-5">
+                    The Pi will remain awake so you can access it for
+                    development, maintenance and debugging.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="font-semibold">Power-down request</p>
+                  <p className="mt-1 text-xs leading-5">
+                    After Developer Mode is turned OFF, the Pi's developer
+                    monitor will detect the change and safely shut the Pi down.
+                  </p>
+                </>
+              )}
+            </div>
+
+            <label className="mt-5 block text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Developer Password
+              <input
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                autoFocus
+                autoComplete="current-password"
+                placeholder="Enter password"
+                className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-[#2E7D32] focus:ring-2 focus:ring-[#2E7D32]/10"
+                disabled={loading}
+              />
+            </label>
+
+            {error && (
+              <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {error}
+              </div>
+            )}
+
+            {message && (
+              <div className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+                {message}
+              </div>
+            )}
+
+            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={closeModal}
+                disabled={loading}
+                className="rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="submit"
+                disabled={loading || !password.trim()}
+                className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-gray-400 ${
+                  action === "enable"
+                    ? "bg-[#2E7D32] hover:bg-[#256628]"
+                    : "bg-red-600 hover:bg-red-700"
+                }`}
+              >
+                {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+                {loading
+                  ? "Updating..."
+                  : action === "enable"
+                    ? "Enable Developer Mode"
+                    : "Turn Off & Shut Down"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ============================================================
    DASHBOARD
 ============================================================ */
 
@@ -916,13 +1219,17 @@ function MonitoringDashboard({
           </button>
 
           {activeDevice && (
-            <button
-              type="button"
-              onClick={onChangeDevice}
-              className="inline-flex w-fit items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              Change Device
-            </button>
+            <>
+              <DeveloperModeControl activeDevice={activeDevice} />
+
+              <button
+                type="button"
+                onClick={onChangeDevice}
+                className="inline-flex w-fit items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Change Device
+              </button>
+            </>
           )}
         </div>
       </div>
