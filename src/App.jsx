@@ -202,7 +202,9 @@ function DeviceSelection({ onSelect }) {
 
                     <div className="mt-5">
                       <h3 className="text-base font-bold text-gray-900">
-                        {device.device_name || "Ambady Device"}
+                        {device.name ||
+                          device.device_name ||
+                          `Raspberry Pi 5 - ${device.device_id.replace("PI5-", "")}`}
                       </h3>
 
                       <p className="mt-1 text-xs font-medium text-gray-500">
@@ -1779,7 +1781,7 @@ function MonitoringDashboard({
                   </th>
 
                   <th className="px-5 py-3">
-                    Images
+                    Result
                   </th>
                 </tr>
               </thead>
@@ -1827,37 +1829,20 @@ function MonitoringDashboard({
                       </td>
 
                       <td className="px-5 py-4">
-                        <div className="flex items-center gap-3 whitespace-nowrap">
-                          {item.original_image_url ? (
-                            <a
-                              href={item.original_image_url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="font-semibold text-[#2E7D32] hover:underline"
-                            >
-                              Original
-                            </a>
-                          ) : (
-                            <span className="text-gray-400">
-                              Original unavailable
-                            </span>
-                          )}
-
-                          {item.result_image_url ? (
-                            <a
-                              href={item.result_image_url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="font-semibold text-[#2E7D32] hover:underline"
-                            >
-                              View result
-                            </a>
-                          ) : (
-                            <span className="text-gray-400">
-                              Result unavailable
-                            </span>
-                          )}
-                        </div>
+                        {item.result_image_url ? (
+                          <a
+                            href={
+                              item.result_image_url
+                            }
+                            target="_blank"
+                            rel="noreferrer"
+                            className="font-semibold text-[#2E7D32] hover:underline"
+                          >
+                            View result
+                          </a>
+                        ) : (
+                          "—"
+                        )}
                       </td>
                     </tr>
                   )
