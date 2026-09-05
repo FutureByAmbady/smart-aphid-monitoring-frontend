@@ -1,0 +1,215 @@
+
+:root {
+  --ui-ink: #102a2c;
+  --ui-ink-muted: #5f7474;
+  --ui-ink-subtle: #8da09e;
+  --ui-accent: #078b67;
+  --ui-accent-strong: #05694f;
+  --ui-accent-soft: #e7f5ef;
+  --ui-accent-wash: #f3faf7;
+  --ui-amber: #b9781e;
+  --ui-danger: #c64b4b;
+  --ui-danger-soft: #fff0ee;
+  --ui-line: #dce8e4;
+  --ui-line-strong: #c9dbd5;
+  --ui-surface: #ffffff;
+  --ui-surface-subtle: #f6faf8;
+  --ui-canvas: #edf5f2;
+  --ui-shadow: 0 18px 45px rgba(22, 62, 55, 0.08);
+  --ui-shadow-soft: 0 8px 24px rgba(22, 62, 55, 0.07);
+  color: var(--ui-ink);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+html {
+  background: var(--ui-canvas);
+}
+
+body {
+  min-width: 320px;
+  background:
+    radial-gradient(circle at 8% -5%, rgba(7, 139, 103, 0.1), transparent 28rem),
+    linear-gradient(180deg, #f6fbf9 0%, var(--ui-canvas) 52%, #eaf3f0 100%);
+  color: var(--ui-ink);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+a,
+input,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+a {
+  transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease,
+    box-shadow 160ms ease, transform 160ms ease, opacity 160ms ease;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgba(7, 139, 103, 0.22);
+  outline-offset: 2px;
+}
+
+button:not(:disabled):active,
+a:active {
+  transform: translateY(1px);
+}
+
+/* A restrained token bridge for the existing Tailwind utility classes. */
+.bg-gray-50,
+.bg-slate-50 {
+  background-color: var(--ui-surface-subtle) !important;
+}
+
+.bg-white {
+  background-color: var(--ui-surface) !important;
+}
+
+.bg-gray-100,
+.bg-slate-100 {
+  background-color: #eef5f2 !important;
+}
+
+.border-gray-100,
+.border-slate-100 {
+  border-color: #e7efec !important;
+}
+
+.border-gray-200,
+.border-slate-200 {
+  border-color: var(--ui-line) !important;
+}
+
+.border-gray-300,
+.border-slate-300 {
+  border-color: var(--ui-line-strong) !important;
+}
+
+.text-gray-900,
+.text-slate-950,
+.text-slate-900 {
+  color: var(--ui-ink) !important;
+}
+
+.text-gray-800,
+.text-slate-800 {
+  color: #234140 !important;
+}
+
+.text-gray-700,
+.text-slate-700 {
+  color: #385856 !important;
+}
+
+.text-gray-600,
+.text-slate-600 {
+  color: #4c6865 !important;
+}
+
+.text-gray-500,
+.text-slate-500 {
+  color: var(--ui-ink-muted) !important;
+}
+
+.text-gray-400,
+.text-slate-400 {
+  color: var(--ui-ink-subtle) !important;
+}
+
+.hover\:bg-gray-50:hover,
+.hover\:bg-slate-50:hover {
+  background-color: #eef7f3 !important;
+}
+
+.shadow-sm {
+  box-shadow: var(--ui-shadow-soft) !important;
+}
+
+.shadow-2xl {
+  box-shadow: 0 28px 80px rgba(11, 45, 38, 0.22) !important;
+}
+
+.ui-shell {
+  min-height: 100vh;
+  background:
+    linear-gradient(rgba(7, 139, 103, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(7, 139, 103, 0.025) 1px, transparent 1px),
+    var(--ui-canvas);
+  background-size: 32px 32px;
+}
+
+.ui-topbar {
+  border-color: rgba(201, 219, 213, 0.9) !important;
+  background: rgba(255, 255, 255, 0.84) !important;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8), 0 8px 28px rgba(22, 62, 55, 0.04);
+}
+
+.ui-container {
+  width: min(100% - 2rem, 1500px);
+  margin-inline: auto;
+}
+
+.ui-eyebrow {
+  color: var(--ui-accent) !important;
+  letter-spacing: 0.16em;
+}
+
+.ui-panel {
+  border-color: var(--ui-line) !important;
+  box-shadow: var(--ui-shadow-soft) !important;
+}
+
+.ui-panel:hover {
+  border-color: var(--ui-line-strong) !important;
+}
+
+.ui-accent-icon {
+  color: var(--ui-accent) !important;
+  background: var(--ui-accent-soft) !important;
+}
+
+.ui-accent-button {
+  background: var(--ui-accent) !important;
+  border-color: var(--ui-accent) !important;
+}
+
+.ui-accent-button:hover {
+  background: var(--ui-accent-strong) !important;
+  border-color: var(--ui-accent-strong) !important;
+  box-shadow: 0 8px 18px rgba(7, 139, 103, 0.18);
+}
+
+.ui-status-dot {
+  box-shadow: 0 0 0 4px rgba(7, 139, 103, 0.1);
+}
+
+@media (max-width: 640px) {
+  .ui-container {
+    width: min(100% - 1.25rem, 1500px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
