@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bug, UploadCloud, ScanSearch, Clock, Target, X, CheckCircle2, FileImage, AlertTriangle,
   RefreshCw, Database, Camera, TrendingUp, Trophy, Images, Activity, LockKeyhole, Power, Loader2,
@@ -8,7 +8,13 @@ import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, BarChart, Bar,
 } from "recharts";
 import { supabase } from "../lib/supabase";
-import { API_BASE, DETECT_ENDPOINT, DEVICES_ENDPOINT, REFRESH_INTERVAL } from "../lib/config";
+import { REFRESH_INTERVAL } from "../lib/config";
+import {
+  apiGet,
+  apiPost,
+  isApiConnectionError,
+  resolveApiUrl,
+} from "../lib/api";
 import DeviceSelection from "./DeviceSelection";
 import Header from "../components/Header";
 
@@ -80,7 +86,7 @@ function UploadZone({ onFileSelected, hasImage }) {
         </p>
 
         <p className="mt-1 text-xs text-gray-500">
-          PNG, JPG or WEBP · up to 10 MB
+          PNG, JPG or WEBP Â· up to 10 MB
         </p>
 
         <button
@@ -131,7 +137,7 @@ function PreviewPanel({ image, onClear }) {
     <div className="rounded-xl border border-gray-200 bg-white p-4">
       <div className="mb-3 flex items-center justify-between">
         <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-          Preview — Original Image
+          Preview â€” Original Image
         </span>
 
         <button
@@ -438,8 +444,8 @@ function DeveloperModeControl({ activeDevice, onModeChange }) {
     try {
       setChecking(true);
 
-      const response = await fetch(
-        `${API_BASE}/devices/${encodeURIComponent(deviceId)}/developer-mode`
+      const response = await apiGet(
+        `/devices/${encodeURIComponent(deviceId)}/developer-mode`
       );
 
       if (!response.ok) {
@@ -496,17 +502,16 @@ function DeveloperModeControl({ activeDevice, onModeChange }) {
     setMessage("");
 
     try {
-      const response = await fetch(
-        `${API_BASE}/devices/${encodeURIComponent(deviceId)}/developer-mode`,
+      const response = await apiPost(
+        `/devices/${encodeURIComponent(deviceId)}/developer-mode`,
+        JSON.stringify({
+          password,
+          enabled: action === "enable",
+        }),
         {
-          method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            password,
-            enabled: action === "enable",
-          }),
         }
       );
 
@@ -554,8 +559,8 @@ function DeveloperModeControl({ activeDevice, onModeChange }) {
     } catch (err) {
       console.error("Developer mode update error:", err);
       const rawMessage =
-        err instanceof TypeError
-          ? "Unable to connect to the monitoring server."
+        isApiConnectionError(err)
+          ? "Backend unavailable â€” searching for device..."
           : err.message || "Could not update Developer Mode.";
 
       setError(
@@ -1008,7 +1013,7 @@ function MonitoringDashboard({
                     <p className="mt-0.5 text-xs text-gray-500">
                       {activeDevice.device_id}
                       {activeDevice.location
-                        ? ` · ${activeDevice.location}`
+                        ? ` Â· ${activeDevice.location}`
                         : ""}
                     </p>
                   </div>
@@ -1288,7 +1293,7 @@ function MonitoringDashboard({
               <p className="mt-1 text-xs text-gray-500">
                 {latest.device_id ||
                   "Unknown device"}
-                {" · "}
+                {" Â· "}
                 {formatDate(
                   latest.captured_at
                 )}
@@ -1449,7 +1454,7 @@ function MonitoringDashboard({
 
                       <td className="whitespace-nowrap px-5 py-4 font-medium text-gray-800">
                         {item.device_id ||
-                          "—"}
+                          "â€”"}
                       </td>
 
                       <td className="px-5 py-4">
@@ -1473,7 +1478,7 @@ function MonitoringDashboard({
                           ? `${Math.round(
                               item.processing_time_ms
                             )} ms`
-                          : "—"}
+                          : "â€”"}
                       </td>
 
                       <td className="px-5 py-4">
@@ -1771,8 +1776,8 @@ function DashboardApp() {
 
     const checkSSH = async () => {
       try {
-        const response = await fetch(
-          `${API_BASE}/devices/${encodeURIComponent(deviceId)}/connectivity`
+        const response = await apiGet(
+          `/devices/${encodeURIComponent(deviceId)}/connectivity`
         );
 
         if (!response.ok) {
@@ -1825,10 +1830,8 @@ function DashboardApp() {
 
         if (!savedDevice?.device_id) return;
 
-        const response = await fetch(
-          `${DEVICES_ENDPOINT}/${encodeURIComponent(
-            savedDevice.device_id
-          )}`
+        const response = await apiGet(
+          `/devices/${encodeURIComponent(savedDevice.device_id)}`
         );
 
         if (!response.ok) return;
@@ -2032,13 +2035,7 @@ function DashboardApp() {
       );
 
       const response =
-        await fetch(
-          DETECT_ENDPOINT,
-          {
-            method: "POST",
-            body: formData,
-          }
-        );
+        await apiPost("/detect", formData);
 
       if (!response.ok) {
         throw new Error(
@@ -2069,7 +2066,7 @@ function DashboardApp() {
           : data.cloudinary_image
             ? data.cloudinary_image
             : data.image
-              ? `${API_BASE}${data.image}`
+              ? resolveApiUrl(data.image)
               : null;
 
       if (!resultImage) {
@@ -2105,10 +2102,10 @@ function DashboardApp() {
       );
 
       if (
-        err instanceof TypeError
+        isApiConnectionError(err)
       ) {
         setError(
-          "Unable to connect to the detection server. Start the backend and try again."
+          "Backend unavailable â€” searching for device..."
         );
       } else {
         setError(
@@ -2382,3 +2379,5 @@ function DashboardApp() {
 }
 
 export default DashboardApp;
+
+

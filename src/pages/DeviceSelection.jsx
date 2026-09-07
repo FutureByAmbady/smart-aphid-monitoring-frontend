@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Camera, RefreshCw, AlertTriangle, Database } from "lucide-react";
 import Header from "../components/Header";
-import { DEVICES_ENDPOINT } from "../lib/config";
+import { apiGet } from "../lib/api";
 
 export default function DeviceSelection({ onSelect }) {
   const [devices, setDevices] = useState([]);
@@ -12,7 +12,7 @@ export default function DeviceSelection({ onSelect }) {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(DEVICES_ENDPOINT);
+      const response = await apiGet("/devices");
       if (!response.ok) {
         throw new Error(
           `Device server responded with status ${response.status}.`
@@ -158,7 +158,7 @@ export default function DeviceSelection({ onSelect }) {
                       <h3 className="text-base font-bold text-gray-900">
                         {device.name ||
                           device.device_name ||
-                          `Raspberry Pi 5 - ${device.device_id.replace("PI5-", "")}`}
+                          device.device_id}
                       </h3>
 
                       <p className="mt-1 text-xs font-medium text-gray-500">

@@ -1,4 +1,5 @@
 import { Bug } from "lucide-react";
+import BackendConnectionStatus from "./BackendConnectionStatus";
 
 export default function Header() {
   return (
@@ -8,7 +9,7 @@ export default function Header() {
           <Bug className="h-6 w-6 text-white" strokeWidth={2} />
         </div>
 
-        <div>
+        <div className="min-w-0">
           <h1 className="text-lg font-bold tracking-tight text-gray-900 sm:text-xl">
             Smart Aphid Monitoring System
           </h1>
@@ -16,6 +17,10 @@ export default function Header() {
           <p className="text-sm text-gray-500">
             AI-based Yellow Sticky Trap Insect Detection
           </p>
+        </div>
+
+        <div className="ml-auto shrink-0">
+          <BackendConnectionStatus />
         </div>
       </div>
     </header>

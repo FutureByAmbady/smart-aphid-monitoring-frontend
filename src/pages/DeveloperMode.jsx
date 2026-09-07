@@ -4,7 +4,8 @@ import {
   Gauge, Home, Images, Power, Radio, ShieldAlert, Wind, Wifi, WifiOff,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
-import { API_BASE } from "../lib/config";
+import { apiGet, apiPost, isApiConnectionError } from "../lib/api";
+import BackendConnectionStatus from "../components/BackendConnectionStatus";
 
 export default function DeveloperMode({ deviceId }) {
   const [mode, setMode] = useState(false);
@@ -60,8 +61,8 @@ export default function DeveloperMode({ deviceId }) {
   const loadState = async () => {
     if (!deviceId) return;
     try {
-      const response = await fetch(
-        `${API_BASE}/devices/${encodeURIComponent(deviceId)}/manual-state`
+      const response = await apiGet(
+        `/devices/${encodeURIComponent(deviceId)}/manual-state`
       );
       if (!response.ok) return;
       const data = await response.json();
@@ -71,7 +72,9 @@ export default function DeveloperMode({ deviceId }) {
       }
       if (typeof data?.developer_mode === "boolean") setMode(data.developer_mode);
     } catch (err) {
-      console.debug("Manual state unavailable:", err);
+      if (!isApiConnectionError(err)) {
+        console.debug("Manual state unavailable:", err);
+      }
     }
   };
 
@@ -92,7 +95,7 @@ export default function DeveloperMode({ deviceId }) {
   useEffect(() => {
     let mounted = true;
 
-    fetch(`${API_BASE}/devices/${encodeURIComponent(deviceId)}/connectivity`)
+    apiGet(`/devices/${encodeURIComponent(deviceId)}/connectivity`)
       .then((response) => {
         if (!response.ok) throw new Error(`Connectivity check failed: ${response.status}`);
         return response.json();
@@ -113,7 +116,7 @@ export default function DeveloperMode({ deviceId }) {
 
   useEffect(() => {
     let mounted = true;
-    fetch(`${API_BASE}/devices/${encodeURIComponent(deviceId)}/developer-mode`)
+    apiGet(`/devices/${encodeURIComponent(deviceId)}/developer-mode`)
       .then((r) => r.json())
       .then((d) => {
         if (mounted) setMode(Boolean(d.developer_mode));
@@ -166,17 +169,16 @@ export default function DeveloperMode({ deviceId }) {
           "[MANUAL CONTROL] Sending emergency_stop using manual-command endpoint"
         );
 
-        const response = await fetch(
-          `${API_BASE}/devices/${encodeURIComponent(deviceId)}/manual-command`,
+        const response = await apiPost(
+          `/devices/${encodeURIComponent(deviceId)}/manual-command`,
+          JSON.stringify({
+            command: "emergency_stop",
+            payload: payload || {},
+          }),
           {
-            method: "POST",
             headers: {
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({
-              command: "emergency_stop",
-              payload: payload || {},
-            }),
           }
         );
 
@@ -495,10 +497,10 @@ export default function DeveloperMode({ deviceId }) {
     setError("");
 
     try {
-      const response = await fetch(
-        `${API_BASE}/devices/${encodeURIComponent(deviceId)}/clear-emergency`,
+      const response = await apiPost(
+        `/devices/${encodeURIComponent(deviceId)}/clear-emergency`,
+        undefined,
         {
-          method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
@@ -681,6 +683,7 @@ export default function DeveloperMode({ deviceId }) {
           </div>
 
           <div className="flex items-center gap-2 text-[11px] font-bold">
+            <BackendConnectionStatus />
             <StatusTopPill active={state.pi_online} icon={state.pi_online ? Wifi : WifiOff} label={state.pi_online ? "PI ONLINE" : "PI OFFLINE"} />
             <StatusTopPill active={state.esp32_online} icon={Radio} label={state.esp32_online ? "ESP32 ONLINE" : "ESP32 OFFLINE"} />
             <span className="hidden rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-amber-700 sm:inline-flex">
