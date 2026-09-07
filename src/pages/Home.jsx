@@ -1,8 +1,8 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bug, UploadCloud, ScanSearch, Clock, Target, X, CheckCircle2, FileImage, AlertTriangle,
   RefreshCw, Database, Camera, TrendingUp, Trophy, Images, Activity, LockKeyhole, Power, Loader2,
-  Cpu, Wifi, WifiOff,
+  Cpu, ExternalLink, Wifi, WifiOff,
 } from "lucide-react";
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, BarChart, Bar,
@@ -17,6 +17,8 @@ import {
 } from "../lib/api";
 import DeviceSelection from "./DeviceSelection";
 import Header from "../components/Header";
+
+const ESP32_DASHBOARD_URL = "http://192.168.23.5/";
 
 function UploadZone({ onFileSelected, hasImage }) {
   const inputRef = useRef(null);
@@ -735,6 +737,183 @@ function DeveloperModeControl({ activeDevice, onModeChange }) {
   );
 }
 
+function ControllerMetric({ icon: Icon, label, value, detail, accent = "slate" }) {
+  const accents = {
+    emerald: "border-emerald-200 bg-emerald-50/60 text-emerald-700",
+    blue: "border-blue-200 bg-blue-50/60 text-blue-700",
+    amber: "border-amber-200 bg-amber-50/60 text-amber-700",
+    slate: "border-slate-200 bg-slate-50 text-slate-500",
+  };
+
+  return (
+    <div className={`rounded-xl border p-4 ${accents[accent] || accents.slate}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] opacity-80">
+            {label}
+          </p>
+          <p className="mt-2 text-lg font-bold tracking-tight">
+            {value}
+          </p>
+          <p className="mt-1 text-xs opacity-75">
+            {detail}
+          </p>
+        </div>
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/80 shadow-sm">
+          <Icon className="h-4 w-4" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ControllerStatusPanel({ activeDevice }) {
+  const controllerName = activeDevice?.device_id
+    ? `ESP32 controller for ${activeDevice.device_id}`
+    : "ESP32 controller";
+
+  return (
+    <section className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-100 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-700 px-5 py-5 text-white sm:px-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/15">
+              <Cpu className="h-5 w-5 text-cyan-300" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-cyan-300">
+                Controller Dashboard
+              </p>
+              <h3 className="mt-1 text-lg font-bold tracking-tight">
+                ESP32 Aphid Controller
+              </h3>
+              <p className="mt-1 text-sm text-slate-300">
+                {controllerName} · visual dashboard preview
+              </p>
+            </div>
+          </div>
+
+          <span className="inline-flex w-fit items-center gap-2 rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-cyan-200">
+            <span className="h-1.5 w-1.5 rounded-full bg-cyan-300" />
+            Display only
+          </span>
+        </div>
+      </div>
+
+      <div className="space-y-5 p-5 sm:p-6">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <ControllerMetric
+            icon={Activity}
+            label="Controller"
+            value="AWAITING DATA"
+            detail="ESP32 telemetry not connected"
+            accent="slate"
+          />
+          <ControllerMetric
+            icon={WifiOff}
+            label="Wi-Fi"
+            value="NOT CONNECTED"
+            detail="Local controller status"
+            accent="slate"
+          />
+          <ControllerMetric
+            icon={Clock}
+            label="DS3231 RTC"
+            value="AWAITING DATA"
+            detail="RTC is the primary clock"
+            accent="slate"
+          />
+          <ControllerMetric
+            icon={Power}
+            label="Raspberry Pi"
+            value="AWAITING DATA"
+            detail="Power and readiness state"
+            accent="slate"
+          />
+          <ControllerMetric
+            icon={Activity}
+            label="Battery"
+            value="—"
+            detail="Voltage and percentage"
+            accent="slate"
+          />
+          <ControllerMetric
+            icon={Cpu}
+            label="Operation"
+            value="AWAITING DATA"
+            detail="Capture and shutdown state"
+            accent="slate"
+          />
+          <ControllerMetric
+            icon={Wifi}
+            label="Last TX"
+            value="—"
+            detail="UART transmit message"
+            accent="slate"
+          />
+          <ControllerMetric
+            icon={Wifi}
+            label="Last RX"
+            value="—"
+            detail="UART receive message"
+            accent="slate"
+          />
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 lg:col-span-2">
+            <div className="flex items-center gap-2">
+              <Activity className="h-4 w-4 text-slate-500" />
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-600">
+                Operation Flow
+              </p>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {["Pi boot", "Handshake", "Capture", "Safe to cut"].map((step) => (
+                <div key={step} className="rounded-lg border border-dashed border-slate-300 bg-white px-3 py-3 text-center">
+                  <div className="mx-auto h-2 w-2 rounded-full bg-slate-300" />
+                  <p className="mt-2 text-xs font-semibold text-slate-500">{step}</p>
+                  <p className="mt-1 text-[10px] uppercase tracking-wide text-slate-400">Awaiting data</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-slate-500" />
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-600">
+                Schedule & Timing
+              </p>
+            </div>
+            <dl className="mt-4 space-y-3 text-sm">
+              <div className="flex items-center justify-between gap-3 border-b border-slate-200 pb-2">
+                <dt className="text-slate-500">Mode</dt>
+                <dd className="font-semibold text-slate-600">Awaiting data</dd>
+              </div>
+              <div className="flex items-center justify-between gap-3 border-b border-slate-200 pb-2">
+                <dt className="text-slate-500">Next run</dt>
+                <dd className="font-semibold text-slate-600">—</dd>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-slate-500">Project day</dt>
+                <dd className="font-semibold text-slate-600">—</dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+
+        <div className="flex items-start gap-3 rounded-xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-sm text-blue-800">
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+          <p>
+            This controller panel is visual-only. Existing monitoring, detection, device status, and manual-control functionality is unchanged.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function MonitoringDashboard({
   detections,
   loading,
@@ -949,6 +1128,22 @@ function MonitoringDashboard({
               Refresh
             </button>
 
+            <button
+              type="button"
+              onClick={() =>
+                window.open(
+                  ESP32_DASHBOARD_URL,
+                  "_blank",
+                  "noopener,noreferrer"
+                )
+              }
+              title="Open the ESP32 dashboard on the local network"
+              className="inline-flex items-center gap-2 rounded-lg border border-cyan-200 bg-cyan-50 px-3.5 py-2.5 text-sm font-medium text-cyan-800 shadow-sm transition hover:bg-cyan-100"
+            >
+              <ExternalLink className="h-4 w-4" />
+              ESP32 Local Dashboard
+            </button>
+
             {activeDevice && (
               <>
                 <DeveloperModeControl
@@ -1026,6 +1221,8 @@ function MonitoringDashboard({
               </div>
             </div>
           )}
+
+          <ControllerStatusPanel activeDevice={activeDevice} />
 
       {/* Filters */}
 
