@@ -5,6 +5,7 @@ export default function BackendConnectionStatus() {
   const { status, message } = useApiConnectionStatus();
   const connected = status === "connected";
   const searching = status === "searching";
+  const configurationError = status === "configuration-error";
 
   return (
     <span
@@ -13,7 +14,9 @@ export default function BackendConnectionStatus() {
           ? "border-emerald-200 bg-emerald-50 text-emerald-700"
           : searching
             ? "border-amber-200 bg-amber-50 text-amber-700"
-            : "border-red-200 bg-red-50 text-red-700"
+            : configurationError
+              ? "border-orange-200 bg-orange-50 text-orange-700"
+              : "border-red-200 bg-red-50 text-red-700"
       }`}
       role="status"
       title={message}
@@ -26,9 +29,13 @@ export default function BackendConnectionStatus() {
         <WifiOff className="h-3.5 w-3.5" />
       )}
       <span className="hidden sm:inline">
-        {connected ? "Backend connected" : "Backend unavailable — searching for device..."}
+        {connected
+          ? "Backend connected"
+          : configurationError
+            ? "Production API URL not configured"
+            : "Backend unavailable — searching for device..."}
       </span>
-      <span className="sm:hidden">{connected ? "API" : "Searching"}</span>
+      <span className="sm:hidden">{connected ? "API" : configurationError ? "Config" : "Searching"}</span>
     </span>
   );
 }

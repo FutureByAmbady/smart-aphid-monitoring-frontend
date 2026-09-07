@@ -1,9 +1,10 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
 const API_STORAGE_KEY = "smartAphid.activeApiBaseUrl";
 const DISCOVERY_TIMEOUT_MS = 2500;
 const DISCOVERY_RETRY_COOLDOWN_MS = 5000;
 const MAX_DISCOVERY_CANDIDATES = 8;
+const HEALTH_CHECK_INTERVAL_MS = 15000;
 
 
 const initialConnectionState = {
@@ -11,8 +12,14 @@ const initialConnectionState = {
   message: "Backend unavailable — searching for device...",
 };
 
+const productionConfigurationState = {
+  status: "configuration-error",
+  message: "Production API URL is not configured — set VITE_API_URL in Vercel.",
+};
+
 let activeApiBaseUrl = null;
 let discoveryPromise = null;
+let healthCheckPromise = null;
 let lastDiscoveryFailureAt = 0;
 let connectionState = initialConnectionState;
 const listeners = new Set();
@@ -52,6 +59,13 @@ function setUnavailable() {
   });
 }
 
+function setConfigurationError(message = productionConfigurationState.message) {
+  notifyConnectionState({
+    status: productionConfigurationState.status,
+    message,
+  });
+}
+
 function setConnected() {
   notifyConnectionState({
     status: "connected",
@@ -68,12 +82,89 @@ function getConnectionSnapshot() {
   return connectionState;
 }
 
+async function checkBackendHealth() {
+  if (healthCheckPromise) return healthCheckPromise;
+
+  healthCheckPromise = (async () => {
+    try {
+      const baseUrl = await getApiBaseUrl();
+      const controller = new AbortController();
+      const timeout = window.setTimeout(
+        () => controller.abort(),
+        DISCOVERY_TIMEOUT_MS
+      );
+
+      try {
+        let response = await fetch(`${baseUrl}/health`, {
+          method: "GET",
+          cache: "no-store",
+          signal: controller.signal,
+        });
+
+        // Older backend deployments have the root probe but not /health.
+        if (response.status === 404) {
+          response = await fetch(`${baseUrl}/`, {
+            method: "GET",
+            cache: "no-store",
+            signal: controller.signal,
+          });
+        }
+
+        if (!response.ok) throw new Error(`Health check returned ${response.status}`);
+        setConnected();
+        return true;
+      } finally {
+        window.clearTimeout(timeout);
+      }
+    } catch {
+      const failedBaseUrl = activeApiBaseUrl;
+      invalidateApiBaseUrl(failedBaseUrl);
+
+      try {
+        await discoverApiBaseUrl({
+          force: true,
+          excludedBaseUrl: failedBaseUrl,
+        });
+        return true;
+      } catch {
+        if (connectionState.status !== "configuration-error") {
+          setUnavailable();
+        }
+        return false;
+      }
+    }
+  })();
+
+  try {
+    return await healthCheckPromise;
+  } finally {
+    healthCheckPromise = null;
+  }
+}
+
 export function useApiConnectionStatus() {
-  return useSyncExternalStore(
+  const snapshot = useSyncExternalStore(
     subscribe,
     getConnectionSnapshot,
     getConnectionSnapshot
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    const runCheck = () => {
+      if (!cancelled) checkBackendHealth();
+    };
+
+    runCheck();
+    const interval = window.setInterval(runCheck, HEALTH_CHECK_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, []);
+
+  return snapshot;
 }
 
 function normalizeBaseUrl(value) {
@@ -171,15 +262,27 @@ function getBrowserOriginCandidate() {
   return null;
 }
 
+function isBrowserSafeBaseUrl(baseUrl) {
+  if (typeof window === "undefined") return true;
+  if (window.location.protocol !== "https:") return true;
+
+  try {
+    return new URL(baseUrl).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 function getDiscoveryCandidates(excludedBaseUrl = null) {
   const candidates = [
     getConfiguredBaseUrl(),
     readCachedBaseUrl(),
-    getBrowserOriginCandidate(),
+    ...(import.meta.env.PROD ? [] : [getBrowserOriginCandidate()]),
     ...getConfiguredCandidates(),
   ]
     .map(normalizeBaseUrl)
     .filter(Boolean)
+    .filter(isBrowserSafeBaseUrl)
     .filter((candidate) => candidate !== excludedBaseUrl);
 
   return [...new Set(candidates)].slice(0, MAX_DISCOVERY_CANDIDATES);
@@ -193,11 +296,20 @@ async function probeBackend(baseUrl) {
   );
 
   try {
-    const response = await fetch(`${baseUrl}/`, {
+    let response = await fetch(`${baseUrl}/health`, {
       method: "GET",
       cache: "no-store",
       signal: controller.signal,
     });
+
+    // Keep older backend deployments discoverable until they are redeployed.
+    if (response.status === 404) {
+      response = await fetch(`${baseUrl}/`, {
+        method: "GET",
+        cache: "no-store",
+        signal: controller.signal,
+      });
+    }
 
     return response.ok;
   } catch {
@@ -221,6 +333,26 @@ export async function discoverApiBaseUrl({
     now - lastDiscoveryFailureAt < DISCOVERY_RETRY_COOLDOWN_MS
   ) {
     throw new BackendUnavailableError();
+  }
+
+  const configuredBaseUrl = getConfiguredBaseUrl();
+  const configuredCandidates = getConfiguredCandidates();
+  if (
+    import.meta.env.PROD &&
+    !configuredBaseUrl &&
+    configuredCandidates.length === 0
+  ) {
+    setConfigurationError();
+    throw new BackendUnavailableError(productionConfigurationState.message);
+  }
+
+  if (
+    import.meta.env.PROD &&
+    configuredBaseUrl &&
+    !isBrowserSafeBaseUrl(configuredBaseUrl)
+  ) {
+    setConfigurationError("Production API URL must use HTTPS when the frontend is deployed over HTTPS.");
+    throw new BackendUnavailableError(productionConfigurationState.message);
   }
 
   setSearching();
@@ -313,7 +445,7 @@ export function resolveApiUrl(value) {
     activeApiBaseUrl ||
     getConfiguredBaseUrl() ||
     readCachedBaseUrl() ||
-    getBrowserOriginCandidate();
+    (import.meta.env.PROD ? null : getBrowserOriginCandidate());
 
   return baseUrl ? joinApiPath(baseUrl, value) : value;
 }

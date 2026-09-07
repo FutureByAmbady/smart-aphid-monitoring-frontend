@@ -560,7 +560,7 @@ function DeveloperModeControl({ activeDevice, onModeChange }) {
       console.error("Developer mode update error:", err);
       const rawMessage =
         isApiConnectionError(err)
-          ? "Backend unavailable â€” searching for device..."
+          ? "Backend unavailable — searching for device..."
           : err.message || "Could not update Developer Mode.";
 
       setError(
@@ -1763,6 +1763,12 @@ function DashboardApp() {
      the actual FastAPI -> Raspberry Pi SSH check.
   ---------------------------------------------------------- */
   const [sshConnected, setSshConnected] = useState(false);
+  const [deviceStatus, setDeviceStatus] = useState({
+    device_status: "unknown",
+    lte_status: "unknown",
+    lte_connected: null,
+    telemetry_received_at: null,
+  });
 
   useEffect(() => {
     const deviceId = activeDevice?.device_id;
@@ -1805,6 +1811,52 @@ function DashboardApp() {
       mounted = false;
     };
   }, [activeDevice?.device_id, developerMode]);
+
+  useEffect(() => {
+    const deviceId = activeDevice?.device_id;
+
+    if (!deviceId) {
+      setDeviceStatus({
+        device_status: "unknown",
+        lte_status: "unknown",
+        lte_connected: null,
+        telemetry_received_at: null,
+      });
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    const loadDeviceStatus = async () => {
+      try {
+        const response = await apiGet(
+          `/devices/${encodeURIComponent(deviceId)}/status`
+        );
+        if (!response.ok) throw new Error(`Device status returned ${response.status}`);
+        const data = await response.json();
+        if (!cancelled) setDeviceStatus(data);
+      } catch (error) {
+        // A backend failure is not evidence that the Pi is offline.
+        if (!cancelled && isApiConnectionError(error)) {
+          setDeviceStatus((previous) => ({
+            ...previous,
+            device_status: "unknown",
+            lte_status: "unknown",
+            lte_connected: null,
+          }));
+        }
+        console.debug("Device status check failed:", error);
+      }
+    };
+
+    loadDeviceStatus();
+    const interval = setInterval(loadDeviceStatus, REFRESH_INTERVAL);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [activeDevice?.device_id]);
 
   /* ----------------------------------------------------------
      Device session
@@ -2105,7 +2157,7 @@ function DashboardApp() {
         isApiConnectionError(err)
       ) {
         setError(
-          "Backend unavailable â€” searching for device..."
+          "Backend unavailable — searching for device..."
         );
       } else {
         setError(
@@ -2302,33 +2354,89 @@ function DashboardApp() {
                   </>
                 ) : (
                   <>
-                    <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-2.5">
+                    <div className={`rounded-lg border p-2.5 ${
+                      deviceStatus.device_status === "online"
+                        ? "border-emerald-200 bg-emerald-50/60"
+                        : deviceStatus.device_status === "offline"
+                          ? "border-red-200 bg-red-50/60"
+                          : "border-slate-200 bg-slate-50"
+                    }`}>
                       <div className="flex items-start gap-3">
-                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white text-emerald-700 shadow-sm">
-                          <CheckCircle2 className="h-3.5 w-3.5" />
+                        <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white shadow-sm ${
+                          deviceStatus.device_status === "online"
+                            ? "text-emerald-700"
+                            : deviceStatus.device_status === "offline"
+                              ? "text-red-600"
+                              : "text-slate-400"
+                        }`}>
+                          {deviceStatus.device_status === "online" ? (
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                          ) : (
+                            <WifiOff className="h-3.5 w-3.5" />
+                          )}
                         </div>
                         <div>
-                          <p className="text-[11px] font-bold uppercase tracking-wide text-emerald-700">
+                          <p className={`text-[11px] font-bold uppercase tracking-wide ${
+                            deviceStatus.device_status === "online"
+                              ? "text-emerald-700"
+                              : deviceStatus.device_status === "offline"
+                                ? "text-red-700"
+                                : "text-slate-400"
+                          }`}>
                             Device
                           </p>
-                          <p className="mt-1 text-sm font-bold text-emerald-800">
-                            ACTIVE
+                          <p className={`mt-1 text-sm font-bold ${
+                            deviceStatus.device_status === "online"
+                              ? "text-emerald-800"
+                              : deviceStatus.device_status === "offline"
+                                ? "text-red-800"
+                                : "text-slate-500"
+                          }`}>
+                            {deviceStatus.device_status === "online" ? "ONLINE" : deviceStatus.device_status === "offline" ? "OFFLINE" : "UNKNOWN"}
                           </p>
                         </div>
                       </div>
                     </div>
 
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+                    <div className={`rounded-lg border p-2.5 ${
+                      deviceStatus.lte_status === "connected"
+                        ? "border-emerald-200 bg-emerald-50/60"
+                        : deviceStatus.lte_status === "disconnected"
+                          ? "border-red-200 bg-red-50/60"
+                          : "border-slate-200 bg-slate-50"
+                    }`}>
                       <div className="flex items-start gap-3">
-                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white text-slate-400 shadow-sm">
-                          <WifiOff className="h-3.5 w-3.5" />
+                        <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white shadow-sm ${
+                          deviceStatus.lte_status === "connected"
+                            ? "text-emerald-700"
+                            : deviceStatus.lte_status === "disconnected"
+                              ? "text-red-600"
+                              : "text-slate-400"
+                        }`}>
+                          {deviceStatus.lte_status === "connected" ? (
+                            <Wifi className="h-3.5 w-3.5" />
+                          ) : (
+                            <WifiOff className="h-3.5 w-3.5" />
+                          )}
                         </div>
                         <div>
-                          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">
+                          <p className={`text-[11px] font-bold uppercase tracking-wide ${
+                            deviceStatus.lte_status === "connected"
+                              ? "text-emerald-700"
+                              : deviceStatus.lte_status === "disconnected"
+                                ? "text-red-700"
+                                : "text-slate-400"
+                          }`}>
                             LTE
                           </p>
-                          <p className="mt-1 text-sm font-bold text-slate-500">
-                            DISCONNECTED
+                          <p className={`mt-1 text-sm font-bold ${
+                            deviceStatus.lte_status === "connected"
+                              ? "text-emerald-800"
+                              : deviceStatus.lte_status === "disconnected"
+                                ? "text-red-800"
+                                : "text-slate-500"
+                          }`}>
+                            {deviceStatus.lte_status === "connected" ? "CONNECTED" : deviceStatus.lte_status === "disconnected" ? "DISCONNECTED" : "UNKNOWN"}
                           </p>
                         </div>
                       </div>
@@ -2379,5 +2487,6 @@ function DashboardApp() {
 }
 
 export default DashboardApp;
+
 
 

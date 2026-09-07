@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Camera, RefreshCw, AlertTriangle, Database } from "lucide-react";
 import Header from "../components/Header";
-import { apiGet } from "../lib/api";
+import { apiGet, isApiConnectionError } from "../lib/api";
 
 export default function DeviceSelection({ onSelect }) {
   const [devices, setDevices] = useState([]);
@@ -35,7 +35,7 @@ export default function DeviceSelection({ onSelect }) {
     } catch (err) {
       console.error("Device loading error:", err);
 
-      if (err instanceof TypeError) {
+      if (isApiConnectionError(err)) {
         setError(
           "Unable to connect to the monitoring server. Please start the backend and try again."
         );
@@ -126,7 +126,9 @@ export default function DeviceSelection({ onSelect }) {
           ) : (
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {devices.map((device) => {
-                const online = device.status === "online";
+                const deviceStatus = device.device_status || device.status || "unknown";
+                const online = deviceStatus === "online";
+                const offline = deviceStatus === "offline";
 
                 return (
                   <div
@@ -142,15 +144,21 @@ export default function DeviceSelection({ onSelect }) {
                         className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold ${
                           online
                             ? "bg-emerald-50 text-emerald-700"
-                            : "bg-red-50 text-red-700"
+                            : offline
+                              ? "bg-red-50 text-red-700"
+                              : "bg-slate-100 text-slate-500"
                         }`}
                       >
                         <span
                           className={`h-1.5 w-1.5 rounded-full ${
-                            online ? "bg-emerald-500" : "bg-red-500"
+                            online
+                              ? "bg-emerald-500"
+                              : offline
+                                ? "bg-red-500"
+                                : "bg-slate-400"
                           }`}
                         />
-                        {online ? "ONLINE" : "OFFLINE"}
+                        {online ? "ONLINE" : offline ? "OFFLINE" : "UNKNOWN"}
                       </span>
                     </div>
 
