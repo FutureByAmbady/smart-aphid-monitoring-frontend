@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { Camera, RefreshCw, AlertTriangle, Database } from "lucide-react";
 import Header from "../components/Header";
 import { apiGet, isApiConnectionError } from "../lib/api";
@@ -37,7 +37,9 @@ export default function DeviceSelection({ onSelect }) {
 
       if (isApiConnectionError(err)) {
         setError(
-          "Unable to connect to the monitoring server. Please start the backend and try again."
+          err?.code === "BACKEND_UNAVAILABLE" && err.message
+            ? err.message
+            : "Unable to connect to the monitoring server. Please start the backend and try again."
         );
       } else {
         setError(
@@ -185,7 +187,7 @@ export default function DeviceSelection({ onSelect }) {
                         className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#078b67] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#05694f]"
                       >
                         Open Device
-                        <span aria-hidden="true">→</span>
+                        <span aria-hidden="true">â†’</span>
                       </button>
                     </div>
                   </div>
@@ -202,3 +204,4 @@ export default function DeviceSelection({ onSelect }) {
     </div>
   );
 }
+
