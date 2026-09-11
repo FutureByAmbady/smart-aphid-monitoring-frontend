@@ -259,7 +259,7 @@ function ResultSection({ result }) {
 
       <div className="flex justify-center rounded-lg bg-gray-100 p-3">
         <img
-          src={`${result.annotatedImage}?t=${Date.now()}`}
+          src={result.annotatedImage}
           alt="Annotated detection result"
           className="max-h-96 w-full rounded-md object-contain"
           onError={(e) => {
