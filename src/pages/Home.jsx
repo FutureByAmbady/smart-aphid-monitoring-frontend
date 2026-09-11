@@ -88,7 +88,7 @@ function UploadZone({ onFileSelected, hasImage }) {
         </p>
 
         <p className="mt-1 text-xs text-gray-500">
-          PNG, JPG or WEBP Ã‚Â· up to 10 MB
+          PNG, JPG or WEBP · up to 10 MB
         </p>
 
         <button
@@ -139,7 +139,7 @@ function PreviewPanel({ image, onClear }) {
     <div className="rounded-xl border border-gray-200 bg-white p-4">
       <div className="mb-3 flex items-center justify-between">
         <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-          Preview Ã¢â‚¬â€ Original Image
+          Preview — Original Image
         </span>
 
         <button
@@ -562,7 +562,7 @@ function DeveloperModeControl({ activeDevice, onModeChange }) {
       console.error("Developer mode update error:", err);
       const rawMessage =
         isApiConnectionError(err)
-          ? "Backend unavailable â€” searching for device..."
+          ? "Backend unavailable — searching for device..."
           : err.message || "Could not update Developer Mode.";
 
       setError(
@@ -788,7 +788,7 @@ function ControllerStatusPanel({ activeDevice }) {
                 ESP32 Aphid Controller
               </h3>
               <p className="mt-1 text-sm text-slate-300">
-                {controllerName} Â· visual dashboard preview
+                {controllerName} · visual dashboard preview
               </p>
             </div>
           </div>
@@ -833,7 +833,7 @@ function ControllerStatusPanel({ activeDevice }) {
           <ControllerMetric
             icon={Activity}
             label="Battery"
-            value="â€”"
+            value="—"
             detail="Voltage and percentage"
             accent="slate"
           />
@@ -847,14 +847,14 @@ function ControllerStatusPanel({ activeDevice }) {
           <ControllerMetric
             icon={Wifi}
             label="Last TX"
-            value="â€”"
+            value="—"
             detail="UART transmit message"
             accent="slate"
           />
           <ControllerMetric
             icon={Wifi}
             label="Last RX"
-            value="â€”"
+            value="—"
             detail="UART receive message"
             accent="slate"
           />
@@ -893,11 +893,11 @@ function ControllerStatusPanel({ activeDevice }) {
               </div>
               <div className="flex items-center justify-between gap-3 border-b border-slate-200 pb-2">
                 <dt className="text-slate-500">Next run</dt>
-                <dd className="font-semibold text-slate-600">â€”</dd>
+                <dd className="font-semibold text-slate-600">—</dd>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-slate-500">Project day</dt>
-                <dd className="font-semibold text-slate-600">â€”</dd>
+                <dd className="font-semibold text-slate-600">—</dd>
               </div>
             </dl>
           </div>
@@ -1208,7 +1208,7 @@ function MonitoringDashboard({
                     <p className="mt-0.5 text-xs text-gray-500">
                       {activeDevice.device_id}
                       {activeDevice.location
-                        ? ` Ã‚Â· ${activeDevice.location}`
+                        ? ` · ${activeDevice.location}`
                         : ""}
                     </p>
                   </div>
@@ -1490,7 +1490,7 @@ function MonitoringDashboard({
               <p className="mt-1 text-xs text-gray-500">
                 {latest.device_id ||
                   "Unknown device"}
-                {" Ã‚Â· "}
+                {" · "}
                 {formatDate(
                   latest.captured_at
                 )}
@@ -1651,7 +1651,7 @@ function MonitoringDashboard({
 
                       <td className="whitespace-nowrap px-5 py-4 font-medium text-gray-800">
                         {item.device_id ||
-                          "Ã¢â‚¬â€"}
+                          "—"}
                       </td>
 
                       <td className="px-5 py-4">
@@ -1675,7 +1675,7 @@ function MonitoringDashboard({
                           ? `${Math.round(
                               item.processing_time_ms
                             )} ms`
-                          : "Ã¢â‚¬â€"}
+                          : "—"}
                       </td>
 
                       <td className="px-5 py-4">
@@ -2354,7 +2354,7 @@ function DashboardApp() {
         isApiConnectionError(err)
       ) {
         setError(
-          "Backend unavailable â€” searching for device..."
+          "Backend unavailable — searching for device..."
         );
       } else {
         setError(

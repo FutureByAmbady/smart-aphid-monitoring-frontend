@@ -187,7 +187,7 @@ export default function DeviceSelection({ onSelect }) {
                         className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#078b67] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#05694f]"
                       >
                         Open Device
-                        <span aria-hidden="true">â†’</span>
+                        <span aria-hidden="true">→</span>
                       </button>
                     </div>
                   </div>

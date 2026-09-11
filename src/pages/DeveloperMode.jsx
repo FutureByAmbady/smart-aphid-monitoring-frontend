@@ -7,6 +7,40 @@ import { supabase } from "../lib/supabase";
 import { apiGet, apiPost, isApiConnectionError } from "../lib/api";
 import BackendConnectionStatus from "../components/BackendConnectionStatus";
 
+const WIND_NAMES = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+
+function normalizeAngle(value) {
+  const angle = Number(value);
+  if (!Number.isFinite(angle)) return null;
+  const normalized = ((angle % 360) + 360) % 360;
+  return normalized === 360 ? 0 : normalized;
+}
+
+function compassFromAngle(value) {
+  const angle = normalizeAngle(value);
+  return angle === null ? "--" : WIND_NAMES[Math.round(angle / 45) % 8];
+}
+
+function readLiveWindAngle(hardwareState) {
+  const candidates = [
+    hardwareState.wind_angle,
+    hardwareState.live_wind_angle,
+    hardwareState.wind_direction,
+  ];
+  return candidates.map(normalizeAngle).find((value) => value !== null) ?? null;
+}
+
+function formatAngle(value, fallback = "--") {
+  const angle = normalizeAngle(value);
+  return angle === null ? fallback : `${angle.toFixed(1)}?`;
+}
+
+function readLiveWindDirection(hardwareState, angle) {
+  const named = [hardwareState.wind_compass, hardwareState.wind_direction_name]
+    .find((value) => typeof value === "string" && WIND_NAMES.includes(value.toUpperCase()));
+  return named ? named.toUpperCase() : compassFromAngle(angle);
+}
+
 export default function DeveloperMode({ deviceId }) {
   const [mode, setMode] = useState(false);
   const [state, setState] = useState({
@@ -23,6 +57,9 @@ export default function DeveloperMode({ deviceId }) {
     current_angle: 0,
     target_angle: 0,
     wind_direction: null,
+    wind_angle: null,
+    homed: false,
+    alignment_target: null,
 
     // One physical home limit switch
     home_limit: false,
@@ -50,6 +87,8 @@ export default function DeveloperMode({ deviceId }) {
   const [captureUrl, setCaptureUrl] = useState("");
   const [monitorOpen, setMonitorOpen] = useState(true);
   const [targetAngleInput, setTargetAngleInput] = useState("");
+  const [homeReferenceKnown, setHomeReferenceKnown] = useState(false);
+  const [alignmentResult, setAlignmentResult] = useState("");
 
   const addLog = (text, type = "info") => {
     setLogs((items) => [
@@ -69,6 +108,13 @@ export default function DeveloperMode({ deviceId }) {
       if (data?.state) {
         const { pi_online, ...hardwareState } = data.state;
         setState((prev) => ({ ...prev, ...hardwareState }));
+        if (typeof hardwareState.homed === "boolean") {
+          setHomeReferenceKnown(hardwareState.homed);
+        } else if (hardwareState.home_referenced === true) {
+          setHomeReferenceKnown(true);
+        } else if (Boolean(hardwareState.home_limit) && Math.abs(Number(hardwareState.current_angle ?? 0)) < 0.1) {
+          setHomeReferenceKnown(true);
+        }
       }
       if (typeof data?.developer_mode === "boolean") setMode(data.developer_mode);
     } catch (err) {
@@ -320,6 +366,48 @@ export default function DeveloperMode({ deviceId }) {
       );
 
       // ============================================================
+      // WIND-ALIGNMENT COMMANDS
+      // ============================================================
+      // Poll the existing command record so HOME is only marked as
+      // referenced after the Pi confirms the physical limit was reached.
+      if (["align_angle", "align_wind", "home_alignment", "alignment_stop"].includes(command)) {
+        setMessage(`${label} queued. Waiting for device confirmation...`);
+        addLog(`${label} queued. Waiting for device confirmation...`, "info");
+
+        let completed = null;
+        for (let attempt = 0; attempt < 120; attempt++) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          const { data: statusData, error: statusError } = await supabase.rpc(
+            "get_camera_command_status",
+            { p_command_id: commandId, p_device_id: deviceId }
+          );
+          if (statusError) throw new Error(statusError.message || "Could not check alignment command status.");
+          completed = Array.isArray(statusData) ? statusData[0] : statusData;
+          if (completed?.status === "completed" || completed?.status === "failed") break;
+        }
+
+        if (!completed || completed.status === "pending" || completed.status === "queued" || completed.status === "processing") {
+          throw new Error("Alignment command timed out. The Raspberry Pi did not confirm the movement.");
+        }
+        if (completed.status === "failed") {
+          throw new Error(completed.error_message || completed.response?.message || "Alignment command failed.");
+        }
+
+        setAlignmentResult(command === "alignment_stop" ? "STOPPED" : command === "home_alignment" ? "IDLE" : "ALIGNED");
+        setState((prev) => ({
+          ...prev,
+          homing: false,
+          alignment_status: command === "alignment_stop" ? "stopped" : command === "home_alignment" ? "idle" : "aligned",
+          ...(command === "home_alignment" ? { current_angle: 0, target_angle: 0 } : {}),
+        }));
+        if (command === "home_alignment") setHomeReferenceKnown(true);
+        await loadState();
+        setMessage(`${label} completed.`);
+        addLog(`${label} completed.`, "success");
+        return;
+      }
+
+      // ============================================================
       // ROLLER COMMANDS
       // ============================================================
 
@@ -478,6 +566,11 @@ export default function DeveloperMode({ deviceId }) {
         "Hardware command failed.";
 
       setError(text);
+
+      if (["align_angle", "align_wind", "home_alignment", "alignment_stop"].includes(command)) {
+        setAlignmentResult("ERROR");
+        setState((prev) => ({ ...prev, homing: false, alignment_status: "error" }));
+      }
 
       setMessage(
         "Command was not confirmed by the device."
@@ -645,6 +738,31 @@ export default function DeveloperMode({ deviceId }) {
   const homeLimit =
     Boolean(state.home_limit);
 
+  const liveWindAngle = readLiveWindAngle(state);
+  const liveWindDirection = readLiveWindDirection(state, liveWindAngle);
+  const alignmentTarget = normalizeAngle(state.alignment_target);
+  const moving = homing || state.alignment_status === "moving" || state.alignment_status === "aligning";
+  const directionLabel = state.motor && state.motor !== "stop"
+    ? String(state.motor).toUpperCase()
+    : "--";
+  const statusLabel = emergency
+    ? "ERROR"
+    : alignmentResult && !moving
+      ? alignmentResult
+      : !homeReferenceKnown && !homing
+      ? "HOME REQUIRED"
+      : homing
+        ? "HOMING"
+        : state.alignment_status === "error"
+          ? "ERROR"
+          : state.alignment_status === "aligned"
+            ? "ALIGNED"
+            : state.alignment_status === "stopped"
+              ? "STOPPED"
+              : moving
+                ? (state.alignment_status === "aligning" ? "ALIGNING" : "MOVING")
+                : "IDLE";
+
   return (
     <div className="ui-shell min-h-screen bg-[#f6f8f7] text-slate-900">
       <style>{`
@@ -757,120 +875,150 @@ export default function DeveloperMode({ deviceId }) {
             </div>
           </section>
 
-          {/* Wind alignment — second motor, controlled only by wind direction/encoder */}
+          {/* Wind Alignment ? live sensor, absolute mechanical position, and target controls */}
           <section
             className={`rounded-2xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-7 ${
-              state.alignment_status === "moving" || state.homing
-                ? "ring-1 ring-emerald-200"
-                : ""
+              moving ? "ring-1 ring-emerald-200" : ""
             }`}
           >
             <CardHeading
               icon={Crosshair}
-              eyebrow="02 · WIND ALIGNMENT"
+              eyebrow="02 ? WIND ALIGNMENT"
               title="Wind Alignment"
-              subtitle="Wind direction → automatic orientation"
-              active={state.alignment_status === "moving" || state.homing}
-              status={
-                state.homing
-                  ? "HOMING"
-                  : state.alignment_status === "moving"
-                    ? "MOVING"
-                    : "READY"
-              }
+              subtitle="Live wind sensor ? home-referenced mechanical orientation"
+              active={moving}
+              status={statusLabel}
             />
 
             <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-5">
-              {/* Wind-alignment motor animation */}
-              <div className="flex min-h-44 items-center justify-center rounded-xl border border-slate-100 bg-slate-50 lg:col-span-2">
-                <div className="flex flex-col items-center gap-3">
-                  <div className={`relative flex h-28 w-28 items-center justify-center rounded-full border-[7px] border-slate-300 ${state.alignment_status === "moving" || state.homing ? "motor-spin" : ""}`}>
-                    {[0,1,2,3,4,5,6,7].map((i) => (
-                      <span
-                        key={i}
-                        className="absolute h-2 w-8 rounded-full bg-emerald-500"
-                        style={{ transform: `rotate(${i * 45}deg) translateX(36px)` }}
-                      />
-                    ))}
-                    <div className="h-9 w-9 rounded-full bg-slate-300" />
+              <div className="space-y-4 lg:col-span-2">
+                <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+                      Live Wind
+                    </div>
+                    <Wind className="h-4 w-4 text-emerald-600" />
                   </div>
-                  <div className="text-xs font-semibold text-slate-500">
-                    {state.homing ? "HOMING" : state.alignment_status === "moving" ? "ALIGNING" : "IDLE"}
+                  <div className="mt-2 text-3xl font-black text-slate-900">
+                    {liveWindDirection}
+                  </div>
+                  <div className="mt-1 text-lg font-bold text-emerald-700">
+                    {formatAngle(liveWindAngle)}
+                  </div>
+                  <div className="mt-3 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                    Continuously refreshed sensor reading
+                  </div>
+                </div>
+
+                <div className="flex min-h-36 items-center justify-center rounded-xl border border-slate-100 bg-slate-50">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className={`relative flex h-24 w-24 items-center justify-center rounded-full border-[7px] border-slate-300 ${moving ? "motor-spin" : ""}`}>
+                      {[0,1,2,3,4,5,6,7].map((i) => (
+                        <span
+                          key={i}
+                          className="absolute h-2 w-7 rounded-full bg-emerald-500"
+                          style={{ transform: `rotate(${i * 45}deg) translateX(31px)` }}
+                        />
+                      ))}
+                      <div className="h-8 w-8 rounded-full bg-slate-300" />
+                    </div>
+                    <div className="text-xs font-semibold text-slate-500">
+                      {moving ? directionLabel : "Wind drive idle"}
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Position + wind direction controls */}
               <div className="lg:col-span-3">
                 <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    Current Angle
-                  </div>
-                  <div className="mt-1 flex items-baseline gap-1">
-                    <span className="text-4xl font-black text-slate-900">
-                      {Number(state.current_angle ?? 0).toFixed(1)}
-                    </span>
-                    <span className="text-sm font-semibold text-slate-500">°</span>
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        Current Mechanical Angle
+                      </div>
+                      <div className="mt-1 flex items-baseline gap-1">
+                        <span className="text-4xl font-black text-slate-900">
+                          {formatAngle(currentAngle, "0.0?")}
+                        </span>
+                      </div>
+                      <div className={`mt-1 text-[10px] font-bold uppercase tracking-wide ${homeReferenceKnown ? "text-emerald-700" : "text-amber-700"}`}>
+                        {homeReferenceKnown ? "HOMED ? ABSOLUTE POSITION" : "HOME REQUIRED ? POSITION NOT REFERENCED"}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-right">
+                      <div className="text-[9px] font-bold uppercase text-slate-400">Home Limit</div>
+                      <div className={`mt-1 text-xs font-black ${homeLimit ? "text-emerald-700" : "text-slate-600"}`}>
+                        {homeLimit ? "PRESSED" : "RELEASED"}
+                      </div>
+                    </div>
                   </div>
 
                   <div className="mt-3 grid grid-cols-2 gap-2">
                     <div className="rounded-lg border border-slate-200 bg-white p-3">
-                      <div className="text-[9px] font-bold uppercase text-slate-400">Target</div>
-                      <div className="mt-1 text-sm font-bold text-slate-700">
-                        {Number(state.target_angle ?? 0).toFixed(1)}°
-                      </div>
-                    </div>
-                    <div className="rounded-lg border border-slate-200 bg-white p-3">
-                      <div className="text-[9px] font-bold uppercase text-slate-400">Encoder</div>
+                      <div className="text-[9px] font-bold uppercase text-slate-400">Encoder Pulses</div>
                       <div className="mt-1 font-mono text-sm font-bold text-slate-700">
                         {state.encoder ?? 0}
                       </div>
                     </div>
+                    <div className="rounded-lg border border-slate-200 bg-white p-3">
+                      <div className="text-[9px] font-bold uppercase text-slate-400">Target Angle</div>
+                      <div className="mt-1 text-sm font-bold text-slate-700">
+                        {formatAngle(targetAngle, "--")}
+                      </div>
+                    </div>
                   </div>
 
-                  {state.wind_direction && (
-                    <div className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-slate-500">
-                      Moving {state.wind_direction === "cw" ? "CW" : "CCW"}
+                  {(moving || alignmentTarget !== null) && (
+                    <div className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                      {moving && (
+                        <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
+                          <span>{directionLabel}</span>
+                          <span>{formatAngle(currentAngle, "0.0?")} ? {formatAngle(targetAngle, "--")}</span>
+                        </div>
+                      )}
+                      {alignmentTarget !== null && (
+                        <div className="mt-1 text-[10px] font-semibold text-indigo-700">
+                          Captured align target: {formatAngle(alignmentTarget)}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
 
                 <div className="mt-3">
                   <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    Wind Direction
+                    Target Angle
                   </label>
                   <div className="flex gap-2">
                     <input
                       type="number"
                       min="0"
-                      max="360"
+                      max="359"
                       step="0.1"
                       value={targetAngleInput}
                       onChange={(event) => setTargetAngleInput(event.target.value)}
-                      placeholder="Enter wind direction"
-                      disabled={Boolean(busy) || emergency || state.homing}
+                      placeholder="Enter target angle"
+                      disabled={Boolean(busy) || emergency || moving || !homeReferenceKnown}
                       className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 disabled:bg-slate-100"
                     />
-                    <div className="grid place-items-center rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-500">°</div>
+                    <div className="grid place-items-center rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-500">?</div>
                   </div>
+                  {!homeReferenceKnown && (
+                    <p className="mt-1.5 text-[10px] font-semibold text-amber-700">HOME is required before ROTATE or ALIGN TO WIND.</p>
+                  )}
                 </div>
 
-                <div className="mt-3 grid grid-cols-2 gap-2">
+                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
                   <ControlButton
-                    disabled={
-                      Boolean(busy) ||
-                      emergency ||
-                      state.alignment_status === "moving" ||
-                      state.homing ||
-                      !targetAngleInput.trim()
-                    }
+                    disabled={Boolean(busy) || emergency || moving || !homeReferenceKnown || !targetAngleInput.trim()}
                     onClick={() => {
                       const angle = Number(targetAngleInput);
-                      if (!Number.isFinite(angle) || angle < 0 || angle > 360) {
-                        setError("Enter an angle between 0° and 360°.");
+                      if (!Number.isFinite(angle) || angle < 0 || angle > 359) {
+                        setError("Enter a target angle between 0? and 359?.");
                         return;
                       }
-                      setState((prev) => ({ ...prev, target_angle: angle }));
+                      setAlignmentResult("");
+                      setState((prev) => ({ ...prev, target_angle: angle, alignment_target: null, alignment_status: "moving" }));
                       send("align_angle", { target_angle: angle });
                     }}
                     tone="green"
@@ -879,9 +1027,31 @@ export default function DeveloperMode({ deviceId }) {
                   </ControlButton>
 
                   <ControlButton
-                    disabled={Boolean(busy) || emergency || state.homing}
+                    disabled={Boolean(busy) || emergency || moving || !homeReferenceKnown || liveWindAngle === null}
                     onClick={() => {
-                      setState((prev) => ({ ...prev, target_angle: 0, homing: true }));
+                      if (liveWindAngle === null) {
+                        setError("Live wind angle is not available.");
+                        return;
+                      }
+                      setAlignmentResult("");
+                      setState((prev) => ({
+                        ...prev,
+                        target_angle: liveWindAngle,
+                        alignment_target: liveWindAngle,
+                        alignment_status: "aligning",
+                      }));
+                      send("align_wind", { target_angle: liveWindAngle });
+                    }}
+                    tone="green"
+                  >
+                    <span className="flex items-center justify-center gap-1"><Wind className="h-4 w-4" />ALIGN TO WIND</span>
+                  </ControlButton>
+
+                  <ControlButton
+                    disabled={Boolean(busy) || emergency || moving}
+                    onClick={() => {
+                      setHomeReferenceKnown(false);
+                      setState((prev) => ({ ...prev, target_angle: 0, alignment_target: null, homing: true, alignment_status: "homing" }));
                       setTargetAngleInput("");
                       send("home_alignment");
                     }}
@@ -890,12 +1060,12 @@ export default function DeveloperMode({ deviceId }) {
                     <span className="flex items-center justify-center gap-1"><Home className="h-4 w-4" />HOME</span>
                   </ControlButton>
                 </div>
+
+                <p className="mt-3 text-[10px] leading-4 text-slate-400">
+                  HOME ? GPIO 7 ? 0?. ROTATE uses the current absolute encoder position. ALIGN TO WIND captures one wind reading and keeps that target locked for the movement.
+                </p>
               </div>
             </div>
-
-            <p className="mt-3 text-[10px] leading-4 text-slate-400">
-              Enter the wind direction and press ROTATE. The wind-alignment motor chooses the shortest direction and stops automatically using encoder feedback. HOME returns the mechanism to the physical zero position.
-            </p>
           </section>
         </div>
 
