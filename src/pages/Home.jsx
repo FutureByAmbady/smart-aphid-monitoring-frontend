@@ -18,7 +18,7 @@ import {
 import DeviceSelection from "./DeviceSelection";
 import Header from "../components/Header";
 
-const ESP32_DASHBOARD_URL = "http://192.168.1.16/";
+const ESP32_DASHBOARD_URL = "http://192.168.1.10/";
 
 function UploadZone({ onFileSelected, hasImage }) {
   const inputRef = useRef(null);
